@@ -141,10 +141,16 @@ RefreshPalettesPreVBlank:
 
 
 ; Draw window palettes; this is done before vblank so it can be efficiently DMA'd.
+; WRAM bank 2 is loaded.
 RefreshWindowPalettesPreVBlank:
 	ldh a, [hAutoBGTransferEnabled]
 	and a
-	ret z
+	jr nz, .enabled
+	; Nothing is prepared while transfers are off. A stale "ready" flag would
+	; make the first transfer after enabling copy an old buffer's attributes.
+	ld [W2_UpdatedWindowPortion], a
+	ret
+.enabled
 
 	ldh a, [rWBK]
 	ld b, a
