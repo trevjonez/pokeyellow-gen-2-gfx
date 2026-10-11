@@ -37,6 +37,7 @@ PlayIntroScene:
 	call DelayFrame
 	xor a
 	ldh [rIF], a
+	ldh [rSTAT], a
 	pop af
 	ldh [rIE], a
 	ld a, $90

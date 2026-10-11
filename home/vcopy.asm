@@ -91,25 +91,15 @@ ENDR
 
 ; Copies [hVBlankCopyBGNumRows] rows from hVBlankCopyBGSource to hVBlankCopyBGDest.
 ; If hVBlankCopyBGSource is XX00, the transfer is disabled.
+; Dialogue copies the screen here, then raises the window over the whole
+; frame. Per-tile color has to write attributes in that copy or the window
+; stays on palette 0.
 VBlankCopyBgMap::
 	ldh a, [hVBlankCopyBGSource] ; doubles as enabling byte
 	and a
 	ret z
-	ld [hSPTemp], sp ; save stack pointer
-	ldh a, [hVBlankCopyBGSource]
-	ld l, a
-	ldh a, [hVBlankCopyBGSource + 1]
-	ld h, a
-	ld sp, hl
-	ldh a, [hVBlankCopyBGDest]
-	ld l, a
-	ldh a, [hVBlankCopyBGDest + 1]
-	ld h, a
-	ldh a, [hVBlankCopyBGNumRows]
-	ld b, a
-	xor a
-	ldh [hVBlankCopyBGSource], a ; disable transfer so it doesn't continue next V-blank
-	jr TransferBgRows
+	farcall YellowVBlankCopyBgMap
+	ret
 
 
 VBlankCopyDouble::

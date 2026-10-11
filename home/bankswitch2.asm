@@ -33,7 +33,7 @@ OpenSRAM::
 
 CloseSRAM::
 	push af
-	ld a, 0
+	xor a
 	ld [rBMODE], a
 	ld [rRAMG], a
 	pop af

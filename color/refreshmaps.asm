@@ -3,14 +3,22 @@
 
 ; Called when a map is loaded. Loads tilemap and tile attributes.
 ; LCD is disabled, so we have free reign over vram.
+; The visible 20x18 lives at wMapViewVRAMPointer, not always at vBGMap0.
+; Mom's heal reloads the map without resetting the camera. Writing the new
+; view at the origin left it off to the side of the scrolled window, so the
+; room no longer lined up with the player and the rest of the screen was blank.
 LoadMapVramAndColors::
+	ld a, [wMapViewVRAMPointer]
+	ld e, a
+	ld a, [wMapViewVRAMPointer + 1]
+	ld d, a
 	ld a, $02
 	ldh [rWBK], a
 
 	hlcoord 0, 0
-	ld de, vBGMap0
 	ld b, SCREEN_HEIGHT
 .vramCopyLoop
+	push de
 	ld c, SCREEN_WIDTH
 .vramCopyInnerLoop
 	ld a, $01
@@ -27,15 +35,26 @@ LoadMapVramAndColors::
 	ld a, [hli]
 	ld [de], a
 	inc e
-
+	ld a, e
+	and TILEMAP_WIDTH - 1
+	jr nz, .sameRow
+	ld a, e
+	sub TILEMAP_WIDTH
+	ld e, a
+.sameRow
 	dec c
 	jr nz, .vramCopyInnerLoop
-	ld a, TILEMAP_WIDTH - SCREEN_WIDTH
+	pop de
+	ld a, TILEMAP_WIDTH
 	add e
 	ld e, a
 	jr nc, .noCarry
 	inc d
 .noCarry
+	ld a, d
+	and 3
+	or HIGH(vBGMap0)
+	ld d, a
 	dec b
 	jr nz, .vramCopyLoop
 
@@ -192,6 +211,58 @@ ENDR
 	ldh [rWBK], a
 	ret
 
+
+; VBlankCopyBgMap. With per-tile color, also write the attribute byte for each
+; tile. Without it, copy tiles only, so battles keep Yellow's own attributes.
+; The tile source is read through sp, so this cannot call out after switching sp.
+YellowVBlankCopyBgMap::
+	ldh a, [hOnCGB]
+	and a
+	jr z, .tilesOnly
+	ld a, 2
+	ldh [rWBK], a
+	ld a, [W2_UsePerTileColor]
+	ld b, a
+	xor a
+	ldh [rWBK], a
+	ld a, b
+	and a
+	jr z, .tilesOnly
+	ld hl, sp + 0
+	ld a, h
+	ldh [hSPTemp], a
+	ld a, l
+	ldh [hSPTemp + 1], a
+	ldh a, [hVBlankCopyBGSource]
+	ld l, a
+	ldh a, [hVBlankCopyBGSource + 1]
+	ld h, a
+	ld sp, hl
+	ldh a, [hVBlankCopyBGDest]
+	ld l, a
+	ldh a, [hVBlankCopyBGDest + 1]
+	ld h, a
+	ldh a, [hVBlankCopyBGNumRows]
+	ld b, a
+	xor a
+	ldh [hVBlankCopyBGSource], a
+	jp WindowTransferBgRowsAndColors
+.tilesOnly
+	ld [hSPTemp], sp
+	ldh a, [hVBlankCopyBGSource]
+	ld l, a
+	ldh a, [hVBlankCopyBGSource + 1]
+	ld h, a
+	ld sp, hl
+	ldh a, [hVBlankCopyBGDest]
+	ld l, a
+	ldh a, [hVBlankCopyBGDest + 1]
+	ld h, a
+	ldh a, [hVBlankCopyBGNumRows]
+	ld b, a
+	xor a
+	ldh [hVBlankCopyBGSource], a
+	jp TransferBgRows
 
 ; Replaces the "TransferBgRows" function. Called when menus first appear on top of bg
 ; layer. (called 3 times to fully draw it)

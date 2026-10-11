@@ -45,10 +45,18 @@ ApplyOverworldColor::
 	jp LoadMapVramAndColors
 
 ; Called at the start of VBlank, after rWBK has been switched to bank 1.
-; Fills the window attribute buffer before AutoBgMapTransfer DMAs it.
-; The palette register writes happen later, in YellowColorUpload, so a
-; redrawn map row still has vblank time left to land its attributes.
+; Arms the line-$6e interrupt that builds the window attribute buffer.
+; Building it here pushed AutoBgMapTransfer's attribute DMA past vblank,
+; and the window colors flickered whenever a text box was up.
+; Scanline effects (intro, surfing) own STAT while hLCDCPointer is set,
+; and while the hblank interrupt is still enabled.
 YellowColorVBlank::
+	ldh a, [hLCDCPointer]
+	and a
+	ret nz
+	ldh a, [rSTAT]
+	and STAT_MODE_0
+	ret nz
 	ld a, 2
 	ldh [rWBK], a
 	ld a, [W2_UsePerTileColor]
@@ -58,7 +66,38 @@ YellowColorVBlank::
 	ld a, b
 	and a
 	ret z
+	ldh a, [rIE]
+	or IE_STAT
+	ldh [rIE], a
+	ld a, $6e
+	ldh [rLYC], a
+	ldh a, [rSTAT]
+	or STAT_LYC
+	ldh [rSTAT], a
+	ret
+
+; LCD interrupt, line $6e only. rWBK is 0. The caller checked the line.
+; Clear LYC before returning: hardware retriggers STAT while the match holds,
+; and the early-out below is short enough to still be on this line.
+; The next vblank arms $6e again. Battles leave UsePerTileColor clear.
+YellowLcdPrepare::
+	ldh a, [hOnCGB]
+	and a
+	ret z
+	ld a, $ff
+	ldh [rLYC], a
+	ld a, 2
+	ldh [rWBK], a
+	ld a, [W2_UsePerTileColor]
+	and a
+	jr z, .off
+	xor a
+	ldh [rWBK], a
 	jp GbcPrepareVBlank
+.off
+	xor a
+	ldh [rWBK], a
+	ret
 
 ; Called from PrepareOAMData, after the vblank tile copies.
 YellowColorUpload::

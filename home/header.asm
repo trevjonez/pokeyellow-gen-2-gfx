@@ -10,10 +10,12 @@ SECTION "rst8", ROM0[$0008]
 
 	ds $10 - @, 0 ; unused
 
+; Line-$6e color prepare. Home is full, so the LCD handler reaches it
+; through this slot instead of a farcall.
 SECTION "rst10", ROM0[$0010]
-	rst $38
-
-	ds $18 - @, 0 ; unused
+	ld b, BANK(YellowLcdPrepare)
+	ld hl, YellowLcdPrepare
+	jp Bankswitch
 
 SECTION "rst18", ROM0[$0018]
 	rst $38
