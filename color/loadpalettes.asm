@@ -129,6 +129,26 @@ LoadTilesetPalette:
 	ld [hli], a
 	ld [hli], a
 .notCeladon1st
+	; Pool walkways in Cerulean Gym and Lorelei's room are wood, like the piers outside.
+	; The same floor tiles are stone in the other gyms.
+	ld a, b
+	cp CERULEAN_GYM
+	jr z, .poolWalkway
+	cp LORELEIS_ROOM
+	jr nz, .notPoolWalkway
+.poolWalkway
+	ld a, PAL_BG_BROWN
+	ld hl, W2_TilesetPaletteMap + $01
+	ld [hl], a
+	ld l, $11
+	ld [hl], a
+	ld l, $09
+	ld [hli], a
+	ld [hl], a
+	ld l, $19
+	ld [hli], a
+	ld [hl], a
+.notPoolWalkway
 
 	; Retrieve former wram bank
 	pop af

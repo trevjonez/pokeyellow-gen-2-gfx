@@ -17,10 +17,10 @@
 	const INDOOR_LIGHT_BLUE ; 0F
 	const OUTDOOR_FLOWER    ; 10
 	const INDOOR_FLOWER     ; 11
-	const MAP_PALETTE_12    ; 12
-	const MAP_PALETTE_13    ; 13
-	const MAP_PALETTE_14    ; 14
-	const MAP_PALETTE_15    ; 15
+	const INDOOR_CHAIR      ; 12
+	const BEACH_STOOL       ; 13
+	const DOCK_WATER        ; 14
+	const DOCK_TRUCK        ; 15
 	const MAP_PALETTE_16    ; 16
 	const CAVE_GRAY         ; 17
 	const CAVE_RED          ; 18
@@ -37,7 +37,7 @@
 	const INDOOR_PURPLE     ; 23
 
 	; These are unused
-	const MAP_PALETTE_24    ; 24
+	const FOREST_CLIFF      ; 24
 	const MAP_PALETTE_25    ; 25
 	const MAP_PALETTE_26    ; 26
 	const MAP_PALETTE_27    ; 27

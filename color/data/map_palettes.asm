@@ -113,28 +113,33 @@ MapPalettes:
 	RGB 31,19,24
 	RGB 30,10,6
 
-; 0x12: MAP_PALETTE_12
-	RGB 27,31,27
-	RGB 31,19,0
-	RGB 27,10,5
+; 0x12: INDOOR_CHAIR
+; House chairs. Color 1 keeps the gray floor lines; 2 is the wood.
+	RGB 30,28,26
+	RGB 19,19,19
+	RGB 21,17,7
 	RGB 7,7,7
 
-; 0x13: MAP_PALETTE_13
-	RGB 27,31,27
-	RGB 22,20,10
-	RGB 17,14,3
+; 0x13: BEACH_STOOL
+; Summer Beach House stools. Color 1 keeps the gray floor stripes.
+	RGB 30,28,26
+	RGB 19,19,19
+	RGB 30,10,6
 	RGB 7,7,7
 
-; 0x14: MAP_PALETTE_14
-	RGB 27,31,27
-	RGB 25,25,0
-	RGB 20,17,8
+; 0x14: DOCK_WATER
+; Vermilion Dock water. The water only uses colors 0 and 2;
+; color 1 draws the ship hull stripes and the pilings, so it is gray.
+	RGB 30,28,26
+	RGB 19,19,19
+	RGB 9,9,31
 	RGB 7,7,7
 
-; 0x15: MAP_PALETTE_15
-	RGB 27,31,27
-	RGB 14,17,31
-	RGB 7,11,15
+; 0x15: DOCK_TRUCK
+; The truck at Vermilion Dock. Color 1 is the dock ground around it.
+	RGB 30,28,26
+	RGB 21,17,7
+	RGB 30,10,6
 	RGB 7,7,7
 
 ; 0x16: MAP_PALETTE_16
@@ -221,11 +226,12 @@ MapPalettes:
 	RGB 18,12,31
 	RGB 7,7,7
 
-; 0x24: MAP_PALETTE_24
-	RGB 0,0,0
-	RGB 0,0,0
-	RGB 0,0,0
-	RGB 0,0,0
+; 0x24: FOREST_CLIFF
+; Safari Zone cliff side walls.
+	RGB 28,24,15
+	RGB 24,18,7
+	RGB 20,15,3
+	RGB 10,7,3
 
 ; 0x25: MAP_PALETTE_25
 	RGB 0,0,0

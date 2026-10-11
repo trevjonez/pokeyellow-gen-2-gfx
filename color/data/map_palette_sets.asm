@@ -35,7 +35,7 @@ BeachHousePalSet:
 	db OUTDOOR_BLUE
 	db OUTDOOR_YELLOW
 	db INDOOR_BROWN
-	db OUTDOOR_BROWN
+	db BEACH_STOOL ; slot 6 was unused
 	db CRYS_TEXTBOX
 
 OverworldPalSet:
@@ -70,14 +70,34 @@ GymPalSet:
 	db INDOOR_LIGHT_BLUE
 	db CRYS_TEXTBOX
 
+; Slots 3 and 6 are the dock's own water and truck palettes.
+ShipPortPalSet:
+	db INDOOR_GRAY
+	db INDOOR_RED
+	db INDOOR_GREEN
+	db DOCK_WATER
+	db INDOOR_YELLOW
+	db INDOOR_BROWN
+	db DOCK_TRUCK
+	db CRYS_TEXTBOX
+
+; Slot 4 is unused by these tiles; the chairs take it.
 RedsHouse1PalSet:
 RedsHouse2PalSet:
-DojoPalSet:
 HousePalSet:
+	db INDOOR_GRAY
+	db INDOOR_RED
+	db INDOOR_GREEN
+	db INDOOR_BLUE
+	db INDOOR_CHAIR
+	db INDOOR_BROWN
+	db INDOOR_LIGHT_BLUE
+	db CRYS_TEXTBOX
+
+DojoPalSet:
 ForestGatePalSet:
 UndergroundPalSet:
 ShipPalSet:
-ShipPortPalSet:
 ClubPalSet:
 FacilityPalSet:
 	db INDOOR_GRAY
@@ -104,7 +124,7 @@ LabPalSet:
 	db PC_POKEBALL_PAL
 
 ForestPalSet:
-	db OUTDOOR_GRAY
+	db FOREST_CLIFF ; slot 0 had no tiles in use
 	db FOREST_ROCKS
 	db OUTDOOR_GREEN
 	db OUTDOOR_BLUE
