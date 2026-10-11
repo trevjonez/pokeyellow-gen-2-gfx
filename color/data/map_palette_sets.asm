@@ -39,6 +39,16 @@ BeachHousePalSet:
 	db CRYS_TEXTBOX
 
 OverworldPalSet:
+	db OUTDOOR_GRAY
+	db OUTDOOR_FLOWER
+	db OUTDOOR_GREEN
+	db OUTDOOR_BLUE
+	db OUTDOOR_YELLOW
+	db OUTDOOR_BROWN
+	db OUTDOOR_ROOF
+	db CRYS_TEXTBOX
+
+; The plateau building uses palette 1 for red walls.
 PlateauPalSet:
 	db OUTDOOR_GRAY
 	db OUTDOOR_RED
@@ -49,10 +59,20 @@ PlateauPalSet:
 	db OUTDOOR_ROOF
 	db CRYS_TEXTBOX
 
+; Slot 4 is unused by the gym tiles; the flower beds take it.
+GymPalSet:
+	db INDOOR_GRAY
+	db INDOOR_RED
+	db INDOOR_GREEN
+	db INDOOR_BLUE
+	db INDOOR_FLOWER
+	db INDOOR_BROWN
+	db INDOOR_LIGHT_BLUE
+	db CRYS_TEXTBOX
+
 RedsHouse1PalSet:
 RedsHouse2PalSet:
 DojoPalSet:
-GymPalSet:
 HousePalSet:
 ForestGatePalSet:
 UndergroundPalSet:

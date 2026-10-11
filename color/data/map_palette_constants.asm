@@ -15,8 +15,8 @@
 	const INDOOR_YELLOW     ; 0D
 	const INDOOR_BROWN      ; 0E
 	const INDOOR_LIGHT_BLUE ; 0F
-	const MAP_PALETTE_10    ; 10
-	const MAP_PALETTE_11    ; 11
+	const OUTDOOR_FLOWER    ; 10
+	const INDOOR_FLOWER     ; 11
 	const MAP_PALETTE_12    ; 12
 	const MAP_PALETTE_13    ; 13
 	const MAP_PALETTE_14    ; 14

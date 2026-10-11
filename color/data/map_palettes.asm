@@ -98,17 +98,20 @@ MapPalettes:
 	RGB 14,16,31
 	RGB 7,7,7
 
-; 0x10: MAP_PALETTE_10
-	RGB 27,31,27
-	RGB 31,14,28
-	RGB 31,5,21
-	RGB 7,7,7
+; 0x10: OUTDOOR_FLOWER
+; Colors 0 and 1 match the short-grass checker and draw the stem and leaves.
+; 2 is the petals, 3 their outline.
+	RGB 22,31,10
+	RGB 12,25,1
+	RGB 31,19,24
+	RGB 30,10,6
 
-; 0x11: MAP_PALETTE_11
-	RGB 27,31,27
-	RGB 24,14,31
-	RGB 13,7,21
-	RGB 7,7,7
+; 0x11: INDOOR_FLOWER
+; Celadon Gym's flower beds. Colors 0 and 1 match the floor around them.
+	RGB 30,28,26
+	RGB 15,20,1
+	RGB 31,19,24
+	RGB 30,10,6
 
 ; 0x12: MAP_PALETTE_12
 	RGB 27,31,27
