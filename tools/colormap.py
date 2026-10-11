@@ -7,7 +7,7 @@ Writes:
   OUTDIR/world.png        every map connected to Pallet Town, stitched
   OUTDIR/maps/NAME.png    every map on its own
   OUTDIR/tiles/NAME.png   each tileset's tiles: raw shades, then colored
-  OUTDIR/index.html       pan/zoom viewer for the world and the tile inventory
+  OUTDIR/index.html       pan/zoom viewer; click a warp to follow it, plus the tile inventory
   OUTDIR/data.json        map rectangles, tile palettes and tile usage counts
 
 Colors follow color/loadpalettes.asm at BGP $E4: the tileset's palette set from
@@ -85,7 +85,8 @@ def load():
         if m:
             d['map_ids'][m.group(1)] = len(d['map_ids'])
             d['map_size'][m.group(1)] = (int(m.group(2)), int(m.group(3)))
-    blk = dict(re.findall(r'(\w+)_Blocks:\s*INCBIN\s*"([^"]+)"', src('maps.asm')))
+    blk = {k[:-len('_Blocks')]: v for k, v in
+           label_blocks(src('maps.asm'), r'INCBIN\s*"([^"]+)"').items() if k.endswith('_Blocks')}
     d['maps'] = {}
     hdir = os.path.join(ROOT, 'data/maps/headers')
     for fn in sorted(os.listdir(hdir)):
@@ -97,8 +98,12 @@ def load():
         conns = [(c[0], c[2], int(c[3])) for c in
                  re.findall(r'connection\s+(\w+),\s*(\w+),\s*(\w+),\s*(-?\d+)', text)]
         w, h = d['map_size'][const]
+        obj = os.path.join(ROOT, 'data/maps/objects', label + '.asm')
+        warps = [(int(x), int(y), dest, int(n)) for x, y, dest, n in
+                 re.findall(r'warp_event\s+(\d+),\s*(\d+),\s*(\w+),\s*(\d+)',
+                            open(obj).read())] if os.path.exists(obj) else []
         d['maps'][const] = dict(label=label, tileset=tileset, w=w, h=h,
-                                blk=blk[label], conns=conns)
+                                blk=blk[label], conns=conns, warps=warps)
 
     # Tilesets: graphics, blocks, palette map, palette set, in tileset id order.
     tileset_consts = const_list('constants/tileset_constants.asm')
@@ -163,6 +168,15 @@ def load():
     return d
 
 
+# Per-map tile palette patches that color/loadpalettes.asm applies at runtime.
+RUNTIME_PALMAP = {
+    'CELADON_MART_ROOF': {t: 3 for t in range(0x4b, 0x50)},             # PAL_BG_WATER
+    'CELADON_MART_1F': {t: 4 for t in (0x07, 0x08, 0x17, 0x18)},        # PAL_BG_YELLOW
+    'CERULEAN_GYM': {t: 5 for t in (0x01, 0x11, 0x09, 0x0a, 0x19, 0x1a)},  # PAL_BG_BROWN
+    'LORELEIS_ROOM': {t: 5 for t in (0x01, 0x11, 0x09, 0x0a, 0x19, 0x1a)},
+}
+
+
 def to888(c):
     return tuple(v * 255 // 31 for v in c)
 
@@ -190,6 +204,9 @@ def render_map(d, const, usage=None):
     m = d['maps'][const]
     ts = d['tilesets'][m['tileset']]
     pals = map_palettes(d, const)
+    palmap = list(ts['palmap'])
+    for t, p in RUNTIME_PALMAP.get(const, {}).items():
+        palmap[t] = p
     blocks = open(os.path.join(ROOT, m['blk']), 'rb').read()
     # UndergroundPathNorthSouth.blk is shorter than its header says.
     blocks = blocks.ljust(m['w'] * m['h'], b'\0')
@@ -205,7 +222,7 @@ def render_map(d, const, usage=None):
                     usage[(m['tileset'], tile)] += 1
                 if tile not in cache:
                     pix = tile_pixels(ts['gfx'], tile) if tile < TILESET_SIZE else None
-                    pal = pals[ts['palmap'][tile]]
+                    pal = pals[palmap[tile]]
                     cache[tile] = [[pal[c] for c in row] for row in pix] if pix else None
                 rows = cache[tile]
                 ox, oy = bx * 32 + (t % 4) * 8, by * 32 + (t // 4) * 8
@@ -230,6 +247,30 @@ def place_world(d, start='PALLET_TOWN'):
                         'west': (cx - tw, cy + off), 'east': (cx + cw, cy + off)}[side]
             q.append(tgt)
     return pos
+
+
+def resolve_warps(d):
+    """Each warp's destination as (map const, x, y) in map squares (16px).
+    LAST_MAP returns to whichever map warped in, so list every such map."""
+    into = {}
+    for const, m in d['maps'].items():
+        for x, y, dest, n in m['warps']:
+            into.setdefault(dest, []).append(const)
+    out = {}
+    for const, m in d['maps'].items():
+        res = []
+        for x, y, dest, n in m['warps']:
+            targets = []
+            for t in (sorted(set(into.get(const, []))) if dest == 'LAST_MAP' else [dest]):
+                tw = d['maps'].get(t, {}).get('warps', [])
+                # A LAST_MAP exit lands on the warp in the previous map that led here.
+                if 0 < n <= len(tw) and (dest != 'LAST_MAP' or tw[n - 1][2] == const):
+                    targets.append((t, tw[n - 1][0], tw[n - 1][1]))
+            # Doors lead outside more often than upstairs; list outdoor maps first.
+            targets.sort(key=lambda t: d['maps'][t[0]]['tileset'] not in ('OVERWORLD', 'PLATEAU'))
+            res.append((x, y, targets))
+        out[const] = res
+    return out
 
 
 def tile_sheet(d, const):
@@ -270,13 +311,21 @@ def main():
     maxx = max(x + d['maps'][k]['w'] for k, (x, y) in pos.items())
     maxy = max(y + d['maps'][k]['h'] for k, (x, y) in pos.items())
     world = Image.new('RGB', ((maxx - minx) * 32, (maxy - miny) * 32), (24, 24, 32))
-    rects = []
     for const, (x, y) in pos.items():
-        m = d['maps'][const]
         world.paste(renders[const], ((x - minx) * 32, (y - miny) * 32))
-        rects.append(dict(name=m['label'], x=(x - minx) * 32, y=(y - miny) * 32,
-                          w=m['w'] * 32, h=m['h'] * 32))
     world.save(os.path.join(out, 'world.png'))
+
+    warps = resolve_warps(d)
+    label = {k: m['label'] for k, m in d['maps'].items()}
+    maps = {}
+    for const, m in d['maps'].items():
+        wpos = pos.get(const)
+        maps[m['label']] = dict(
+            w=m['w'] * 32, h=m['h'] * 32,
+            world=[(wpos[0] - minx) * 32, (wpos[1] - miny) * 32] if wpos else None,
+            warps=[dict(x=x * 16, y=y * 16,
+                        to=[dict(map=label[t], x=tx * 16, y=ty * 16) for t, tx, ty in targets])
+                   for x, y, targets in warps[const]])
 
     pal_names = {i: n for i, n in enumerate(const_list('color/data/map_palette_constants.asm')) if n}
     tilesets = []
@@ -287,9 +336,8 @@ def main():
             name=ts['name'], const=const, count=n, sample_map=sample,
             palset=[pal_names[p] for p in ts['palset']],
             tiles=[dict(id=t, pal=ts['palmap'][t], uses=usage[(const, t)]) for t in range(n)]))
-    data = json.dumps(dict(world=dict(w=world.width, h=world.height), maps=rects,
-                           tilesets=tilesets,
-                           all_maps=sorted(m['label'] for m in d['maps'].values())))
+    data = json.dumps(dict(world=dict(w=world.width, h=world.height), maps=maps,
+                           tilesets=tilesets))
     with open(os.path.join(out, 'data.json'), 'w') as f:
         f.write(data)
     # Inline the data so the page also works when opened straight from disk.
@@ -307,14 +355,22 @@ VIEWER = r'''<!doctype html>
 @media (prefers-color-scheme: dark) { :root { --bg:#16161a; --fg:#e8e8ea; --mut:#9a9aa4; --line:#2e2e36; --acc:#ff7a5c; --panel:#1f1f25 } }
 * { box-sizing:border-box }
 body { margin:0; font:14px system-ui,sans-serif; background:var(--bg); color:var(--fg) }
-nav { display:flex; gap:8px; padding:8px 12px; border-bottom:1px solid var(--line); align-items:center; flex-wrap:wrap }
-nav button { font:inherit; padding:4px 10px; border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:6px; cursor:pointer }
+nav { display:flex; gap:8px; padding:8px 12px; border-bottom:1px solid var(--line); align-items:center; flex-wrap:wrap; height:45px }
+nav button, nav select { font:inherit; padding:4px 10px; border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:6px; cursor:pointer }
 nav button[aria-pressed=true] { border-color:var(--acc); color:var(--acc) }
+#where { font-weight:600 }
 #hint { color:var(--mut); margin-left:auto }
-#world { position:relative; height:calc(100vh - 45px); overflow:hidden; cursor:grab; background:#18181f; touch-action:none; user-select:none }
-#world img { position:absolute; left:0; top:0; transform-origin:0 0; image-rendering:pixelated; -webkit-user-drag:none; pointer-events:none }
-#label { position:absolute; pointer-events:none; background:rgba(0,0,0,.75); color:#fff; padding:2px 6px; border-radius:4px; font-size:12px; display:none }
-#tiles { display:none; padding:12px }
+#view { position:relative; height:calc(100vh - 45px); overflow:hidden; cursor:grab; background:#18181f; touch-action:none; user-select:none }
+#stage { position:absolute; left:0; top:0; transform-origin:0 0 }
+#stage img { display:block; image-rendering:pixelated; -webkit-user-drag:none; pointer-events:none }
+#marks { position:absolute; inset:0; pointer-events:none }
+.warp { position:absolute; width:16px; height:16px; outline:1px solid rgba(255,214,0,.9); background:rgba(255,214,0,.18) }
+.warp.dead { outline-color:rgba(255,80,80,.9); background:rgba(255,80,80,.18) }
+body.nowarps .warp { display:none }
+.here { position:absolute; width:16px; height:16px; outline:2px solid #00e5ff; box-shadow:0 0 0 3px rgba(0,229,255,.35); animation:pulse 1s ease-in-out 3 }
+@keyframes pulse { 50% { box-shadow:0 0 0 7px rgba(0,229,255,0) } }
+#label { position:absolute; pointer-events:none; background:rgba(0,0,0,.8); color:#fff; padding:3px 7px; border-radius:4px; font-size:12px; display:none; white-space:pre }
+#tiles { display:none; padding:12px; height:calc(100vh - 45px); overflow:auto }
 .ts { margin:0 0 24px }
 .ts h2 { font-size:15px; margin:0 0 4px }
 .ts p { margin:0 0 8px; color:var(--mut) }
@@ -324,58 +380,112 @@ nav button[aria-pressed=true] { border-color:var(--acc); color:var(--acc) }
 .cell.unused { opacity:.45 }
 </style>
 <nav>
-  <button id="bw" aria-pressed="true">World</button>
-  <button id="bt" aria-pressed="false">Tile inventory</button>
-  <span id="hint">drag to pan, wheel to zoom</span>
+  <button id="bw">World</button>
+  <select id="pick" aria-label="Open a map"></select>
+  <button id="bwarps" aria-pressed="true">Warps</button>
+  <button id="bt">Tile inventory</button>
+  <span id="where"></span>
+  <span id="hint">drag to pan, wheel to zoom, click a yellow warp to follow it, Back to return</span>
 </nav>
-<div id="world"><img id="wimg" src="world.png" alt="Overworld" draggable="false"><div id="label"></div></div>
+<div id="view"><div id="stage"><img id="vimg" alt="" draggable="false"><div id="marks"></div></div><div id="label"></div></div>
 <div id="tiles"></div>
 <script>
-const W = document.getElementById('world'), I = document.getElementById('wimg'), L = document.getElementById('label');
-let s = 2, x = 0, y = 0, drag = null, data = null;
-const apply = () => I.style.transform = `translate(${x}px,${y}px) scale(${s})`;
-W.addEventListener('wheel', e => { e.preventDefault();
-  const r = W.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+const data = /*DATA*/null;
+const V = document.getElementById('view'), S = document.getElementById('stage'), I = document.getElementById('vimg'),
+      M = document.getElementById('marks'), L = document.getElementById('label'), T = document.getElementById('tiles');
+let s = 3, x = 0, y = 0, drag = null, cur = null, warps = [], rects = [];
+const apply = () => S.style.transform = `translate(${x}px,${y}px) scale(${s})`;
+const worldMaps = Object.entries(data.maps).filter(([, m]) => m.world);
+
+// Where a warp target lands: in the world view when the map is outdoors.
+const link = t => { const m = data.maps[t.map];
+  return m.world ? `#world@${m.world[0] + t.x},${m.world[1] + t.y}` : `#map/${t.map}@${t.x},${t.y}`; };
+
+function show(hash) {
+  const [route, at] = (hash.replace(/^#/, '') || 'world').split('@');
+  const tiles = route === 'tiles';
+  V.style.display = tiles ? 'none' : 'block'; T.style.display = tiles ? 'block' : 'none';
+  document.getElementById('bt').setAttribute('aria-pressed', tiles);
+  document.getElementById('bw').setAttribute('aria-pressed', route === 'world');
+  document.getElementById('hint').style.visibility = tiles ? 'hidden' : 'visible';
+  if (tiles) { document.getElementById('where').textContent = ''; return; }
+  let w, h;
+  if (route.startsWith('map/') && data.maps[route.slice(4)]) {
+    const name = route.slice(4), m = data.maps[name];
+    cur = name; I.src = `maps/${name}.png`; w = m.w; h = m.h; rects = [[name, 0, 0, m.w, m.h]];
+    warps = m.warps.map(wp => ({ ...wp, from: name }));
+  } else {
+    cur = null; I.src = 'world.png'; w = data.world.w; h = data.world.h;
+    rects = worldMaps.map(([n, m]) => [n, m.world[0], m.world[1], m.w, m.h]);
+    warps = worldMaps.flatMap(([n, m]) => m.warps.map(wp => ({ ...wp, from: n, x: wp.x + m.world[0], y: wp.y + m.world[1] })));
+  }
+  S.style.width = w + 'px'; S.style.height = h + 'px';
+  document.getElementById('where').textContent = cur || 'Overworld';
+  document.getElementById('pick').value = cur || '';
+  M.replaceChildren(...warps.map(wp => { const e = document.createElement('div');
+    e.className = 'warp' + (wp.to.length ? '' : ' dead'); e.style.left = wp.x + 'px'; e.style.top = wp.y + 'px'; return e; }));
+  let fx = w / 2, fy = h / 2;
+  if (at) { [fx, fy] = at.split(',').map(Number); const e = document.createElement('div');
+    e.className = 'here'; e.style.left = fx + 'px'; e.style.top = fy + 'px'; M.append(e); fx += 8; fy += 8; }
+  else if (!cur) { const p = data.maps.PalletTown; fx = p.world[0] + p.w / 2; fy = p.world[1] + p.h / 2; }
+  s = cur && !at ? Math.max(1, Math.min(6, Math.floor(Math.min(V.clientWidth / w, V.clientHeight / h)))) : 3;
+  x = V.clientWidth / 2 - fx * s; y = V.clientHeight / 2 - fy * s; apply(); L.style.display = 'none';
+}
+
+const at = e => { const r = V.getBoundingClientRect(); return [(e.clientX - r.left - x) / s, (e.clientY - r.top - y) / s, e.clientX - r.left, e.clientY - r.top]; };
+const hit = (wx, wy) => warps.find(w => wx >= w.x && wx < w.x + 16 && wy >= w.y && wy < w.y + 16);
+V.addEventListener('wheel', e => { e.preventDefault();
+  const r = V.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
   const n = Math.min(16, Math.max(0.25, s * (e.deltaY < 0 ? 1.25 : 0.8)));
   x = mx - (mx - x) * n / s; y = my - (my - y) * n / s; s = n; apply(); }, { passive:false });
-W.addEventListener('pointerdown', e => { e.preventDefault(); drag = [e.clientX - x, e.clientY - y];
-  W.setPointerCapture(e.pointerId); W.style.cursor = 'grabbing'; });
-const stop = () => { drag = null; W.style.cursor = ''; };
-W.addEventListener('pointerup', stop);
-W.addEventListener('pointercancel', stop);
-W.addEventListener('pointermove', e => {
-  if (drag) { x = e.clientX - drag[0]; y = e.clientY - drag[1]; apply(); }
-  if (!data) return;
-  const r = W.getBoundingClientRect(), wx = (e.clientX - r.left - x) / s, wy = (e.clientY - r.top - y) / s;
-  const m = data.maps.find(m => wx >= m.x && wx < m.x + m.w && wy >= m.y && wy < m.y + m.h);
-  L.style.display = m ? 'block' : 'none';
-  if (m) { L.textContent = `${m.name}  block ${Math.floor((wx - m.x) / 32)},${Math.floor((wy - m.y) / 32)}`;
-    L.style.left = (e.clientX - r.left + 12) + 'px'; L.style.top = (e.clientY - r.top + 12) + 'px'; }
+V.addEventListener('pointerdown', e => { e.preventDefault(); drag = { sx:e.clientX, sy:e.clientY, ox:e.clientX - x, oy:e.clientY - y, moved:false };
+  V.setPointerCapture(e.pointerId); V.style.cursor = 'grabbing'; });
+V.addEventListener('pointerup', e => {
+  const d = drag; drag = null; V.style.cursor = '';
+  if (!d || d.moved) return;
+  const [wx, wy] = at(e), w = hit(wx, wy);
+  if (w && w.to.length) location.hash = link(w.to[0]);
 });
-const home = () => { const p = data && data.maps.find(m => m.name === 'PalletTown');
-  s = 3; x = W.clientWidth / 2 - (p ? p.x + p.w / 2 : 0) * s; y = W.clientHeight / 2 - (p ? p.y + p.h / 2 : 0) * s; apply(); };
-const tab = t => { W.style.display = t ? 'none' : 'block'; document.getElementById('tiles').style.display = t ? 'block' : 'none';
-  document.getElementById('bw').setAttribute('aria-pressed', !t); document.getElementById('bt').setAttribute('aria-pressed', !!t);
-  document.getElementById('hint').style.visibility = t ? 'hidden' : 'visible'; };
-document.getElementById('bw').onclick = () => tab(0);
-document.getElementById('bt').onclick = () => tab(1);
-Promise.resolve(/*DATA*/null).then(d => { data = d; home();
-  const T = document.getElementById('tiles');
-  for (const ts of d.tilesets) {
-    const sec = document.createElement('section'); sec.className = 'ts';
-    sec.innerHTML = `<h2>${ts.name}</h2><p>palettes 0-7: ${ts.palset.join(', ')} &middot; colors shown for ${ts.sample_map || 'no map'} &middot; left raw, right colored &middot; faded = unused in any map</p>`;
-    const g = document.createElement('div'); g.className = 'grid';
-    for (const t of ts.tiles) {
-      const c = document.createElement('div'); c.className = 'cell' + (t.uses ? '' : ' unused');
-      const sw = document.createElement('div');
-      sw.style.backgroundImage = `url("tiles/${ts.name}.png")`;
-      sw.style.backgroundPosition = `-${(t.id % 16) * 72}px -${Math.floor(t.id / 16) * 36}px`;
-      c.append(sw, `$${t.id.toString(16).padStart(2, '0')} p${t.pal} ×${t.uses}`);
-      g.append(c);
-    }
-    sec.append(g); T.append(sec);
+V.addEventListener('pointercancel', () => { drag = null; V.style.cursor = ''; });
+V.addEventListener('pointermove', e => {
+  if (drag) { if (Math.abs(e.clientX - drag.sx) + Math.abs(e.clientY - drag.sy) > 4) drag.moved = true;
+    if (drag.moved) { x = e.clientX - drag.ox; y = e.clientY - drag.oy; apply(); } }
+  const [wx, wy, mx, my] = at(e), r = rects.find(r => wx >= r[1] && wx < r[1] + r[3] && wy >= r[2] && wy < r[2] + r[4]);
+  const w = hit(wx, wy);
+  if (!drag) V.style.cursor = w && w.to.length ? 'pointer' : '';  // warps stay clickable when hidden
+  if (!r) { L.style.display = 'none'; return; }
+  let t = `${r[0]}  (${Math.floor((wx - r[1]) / 16)}, ${Math.floor((wy - r[2]) / 16)})`;
+  if (w) t += w.to.length ? `\n→ ${w.to.map(t => t.map).join('\n   or ')}` : '\n→ set by a script';
+  L.textContent = t; L.style.display = 'block'; L.style.left = (mx + 14) + 'px'; L.style.top = (my + 14) + 'px';
+});
+
+const pick = document.getElementById('pick');
+pick.append(new Option('Open a map…', ''), ...Object.keys(data.maps).sort().map(n => new Option(n, n)));
+pick.onchange = () => { if (pick.value) location.hash = '#map/' + pick.value; };
+document.getElementById('bw').onclick = () => location.hash = '#world';
+document.getElementById('bt').onclick = () => location.hash = '#tiles';
+const BW = document.getElementById('bwarps');
+const setWarps = on => { document.body.classList.toggle('nowarps', !on); BW.setAttribute('aria-pressed', on);
+  try { localStorage.setItem('warps', on ? '1' : '0'); } catch (e) {} };
+BW.onclick = () => setWarps(document.body.classList.contains('nowarps'));
+try { setWarps(localStorage.getItem('warps') !== '0'); } catch (e) {}
+window.addEventListener('hashchange', () => show(location.hash));
+
+for (const ts of data.tilesets) {
+  const sec = document.createElement('section'); sec.className = 'ts';
+  sec.innerHTML = `<h2>${ts.name}</h2><p>palettes 0-7: ${ts.palset.join(', ')} &middot; colors shown for ${ts.sample_map || 'no map'} &middot; left raw, right colored &middot; faded = unused in any map</p>`;
+  const g = document.createElement('div'); g.className = 'grid';
+  for (const t of ts.tiles) {
+    const c = document.createElement('div'); c.className = 'cell' + (t.uses ? '' : ' unused');
+    const sw = document.createElement('div');
+    sw.style.backgroundImage = `url("tiles/${ts.name}.png")`;
+    sw.style.backgroundPosition = `-${(t.id % 16) * 72}px -${Math.floor(t.id / 16) * 36}px`;
+    c.append(sw, `$${t.id.toString(16).padStart(2, '0')} p${t.pal} ×${t.uses}`);
+    g.append(c);
   }
-});
+  sec.append(g); T.append(sec);
+}
+show(location.hash);
 </script>
 '''
 
