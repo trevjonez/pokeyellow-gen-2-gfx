@@ -248,6 +248,84 @@ ClearPlainWindowPal::
 	ldh [rWBK], a
 	jp LoadTilesetPalette
 
+; SET_PAL_OVERWORLD while per-tile color owns the screen. Yellow's version
+; would replace every palette and the attribute map with the town's 4-color
+; set, e.g. when walking out of town. Reload the map's own palettes instead.
+; Returns d = 1 if handled.
+OverworldColorPaletteCommand::
+	call PerTileColorOwnsBgOnCGB
+	ld d, 0
+	ret z
+	ld a, SET_PAL_OVERWORLD
+	ld [wDefaultPaletteCommand], a
+	call LoadTilesetPalette
+	call LoadOverworldSpritePalettes
+	ldh a, [rWBK]
+	ld b, a
+	ld a, 2
+	ldh [rWBK], a
+	ld a, 1
+	ld [W2_ForceBGPUpdate], a
+	ld [W2_ForceOBPUpdate], a
+	ld a, b
+	ldh [rWBK], a
+	ld d, 1
+	ret
+
+; The portrait tiles are above the tileset, so they use the window palette (7).
+; Yellow's palette commands would replace the overworld palettes and attributes.
+LoadPikachuPortraitPalettes::
+	call PerTileColorOwnsBgOnCGB
+	jr nz, .perTile
+	callfar LoadOverworldPikachuFrontpicPalettes
+	ret
+.perTile
+	ldh a, [rWBK]
+	ld b, a
+	ld a, 2
+	ldh [rWBK], a
+	ld a, 1
+	ld [W2_ForceBGPUpdate], a
+	ld hl, PikachuPortraitBGPalette
+	ld de, W2_BgPaletteData + 7 palettes
+	ld c, 1 palettes
+.copy
+	ld a, [hli]
+	ld [de], a
+	inc de
+	dec c
+	jr nz, .copy
+	ld a, b
+	ldh [rWBK], a
+	ret
+
+; CGB colors of PAL_PIKACHU_PORTRAIT in data/sgb/sgb_palettes.asm.
+PikachuPortraitBGPalette:
+	RGB 31, 31, 31, 31, 18, 00, 19, 07, 01, 03, 03, 03
+
+RestorePikachuPortraitPalettes::
+	call PerTileColorOwnsBgOnCGB
+	jp z, RunDefaultPaletteCommand
+	ldh a, [rWBK]
+	ld b, a
+	ld a, 2
+	ldh [rWBK], a
+	ld a, 1
+	ld [W2_ForceBGPUpdate], a
+	ld a, b
+	ldh [rWBK], a
+	jp LoadTilesetPalette
+
+; nz when the per-tile engine owns the palettes.
+PerTileColorOwnsBgOnCGB:
+	ldh a, [hOnCGB]
+	and a
+	ret z
+	call PerTileColorOwnsBg
+	ld a, d
+	and a
+	ret
+
 ; The heal machine writes OBJ palettes itself. Ask the next vblank to put ours back.
 ForceOverworldSpritePalettes::
 	ldh a, [rWBK]

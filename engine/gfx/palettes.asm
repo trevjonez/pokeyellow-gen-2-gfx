@@ -5,6 +5,14 @@ _RunPaletteCommand:
 	jr nz, .not_default
 	ld a, [wDefaultPaletteCommand]
 .not_default
+	cp SET_PAL_OVERWORLD
+	jr nz, .notOverworld
+	push af
+	farcall OverworldColorPaletteCommand
+	pop af
+	dec d ; d = 1 if per-tile color took the command
+	ret z
+.notOverworld
 	cp SET_PAL_PARTY_MENU_HP_BARS
 	jp z, UpdatePartyMenuBlkPacket
 	ld l, a
