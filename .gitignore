@@ -32,3 +32,6 @@
 *.sn*
 *.sa*
 *.sg1
+
+# tools/colormap.py output
+/colormap/
