@@ -34,3 +34,20 @@ WriteOAMBlock::
 	inc de
 	ld [hli], a
 	ret
+
+; A holds the OAM flags. ColorOverworldSprite writes the colored flags,
+; advances hl and e, and returns the original flags in A.
+; The wrapper stays in ROM0 so the banked call can return.
+_ColorOverworldSprite::
+	ld b, a
+	ldh a, [hLoadedROMBank]
+	push af
+	ld a, BANK(ColorOverworldSprite)
+	call SetRomBank
+	ld a, b
+	call ColorOverworldSprite
+	ld b, a
+	pop af
+	call SetRomBank
+	ld a, b
+	ret

@@ -229,6 +229,11 @@ LoadTownMap_Fly::
 	xor a
 	ld [wTownMapSpriteBlinkingEnabled], a
 	ldh [hJoy7], a
+	ldh a, [hOnCGB]
+	and a
+	jr z, .noClearFlyPal
+	farcall ClearPlainWindowPal
+.noClearFlyPal
 	call GBPalWhiteOutWithDelay3
 	pop hl
 	pop af
@@ -291,6 +296,11 @@ TownMapUpArrow:
 TownMapUpArrowEnd:
 
 LoadTownMap:
+	ldh a, [hOnCGB]
+	and a
+	jr z, .noTownPal
+	farcall SetPlainWindowPal
+.noTownPal
 	call GBPalWhiteOutWithDelay3
 	call ClearScreen
 	call UpdateSprites
@@ -346,6 +356,11 @@ ExitTownMap:
 ; clear town map graphics data and load usual graphics data
 	xor a
 	ld [wTownMapSpriteBlinkingEnabled], a
+	ldh a, [hOnCGB]
+	and a
+	jr z, .noClearPal
+	farcall ClearPlainWindowPal
+.noClearPal
 	call GBPalWhiteOut
 	call ClearScreen
 	call ClearSprites

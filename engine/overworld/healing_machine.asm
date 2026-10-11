@@ -55,6 +55,7 @@ AnimateHealingMachine:
 	pop af
 	ldh [rOBP1], a
 	call UpdateCGBPal_OBP1
+	farcall ForceOverworldSpritePalettes
 	pop hl
 	pop af
 	ld [hl], a

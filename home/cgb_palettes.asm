@@ -6,6 +6,10 @@ UpdateCGBPal_BGP::
 	push bc
 	push de
 	push hl
+	farcall PerTileColorOwnsBg
+	ld a, d
+	and a
+	jr nz, .noChangeInBGP
 	ldh a, [rBGP]
 	ld b, a
 	ld a, [wLastBGP]
@@ -28,6 +32,10 @@ UpdateCGBPal_OBP0::
 	push bc
 	push de
 	push hl
+	farcall PerTileColorOwnsBg
+	ld a, d
+	and a
+	jr nz, .noChangeInOBP0
 	ldh a, [rOBP0]
 	ld b, a
 	ld a, [wLastOBP0]

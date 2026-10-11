@@ -57,3 +57,7 @@ INCLUDE "constants/pikachu_emotion_constants.asm"
 IF DEF(_YELLOW_VC)
 INCLUDE "vc/pokeyellow.constants.asm"
 ENDC
+
+INCLUDE "macros/color.asm"
+INCLUDE "color/wram.asm"
+INCLUDE "color/data/map_palette_constants.asm"

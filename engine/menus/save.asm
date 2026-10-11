@@ -70,6 +70,16 @@ LoadMainData:
 	call CopyData
 	ld a, [sTileAnimations]
 	ldh [hTileAnimations], a
+; The saved tileset header holds absolute block, gfx, and collision
+; pointers. Continue used to keep those bytes, so a ROM that moved the
+; collision lists made every tile solid. Refresh the header from this
+; ROM and leave BIT_NO_PREVIOUS_MAP set so the map header still comes
+; from the save.
+	ld hl, wCurMapTileset
+	res BIT_NO_PREVIOUS_MAP, [hl]
+	farcall ReloadTilesetHeaderFromROM
+	ld hl, wCurMapTileset
+	set BIT_NO_PREVIOUS_MAP, [hl]
 
 ; this part is redundant, LoadCurrentBoxData is always called next
 	ld hl, sCurBoxData

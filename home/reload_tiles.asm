@@ -8,6 +8,11 @@ ReloadMapData::
 	call LoadTextBoxTilePatterns
 	call LoadCurrentMapView
 	call LoadTilesetTilePatternData
+	ldh a, [hOnCGB]
+	and a
+	jr z, .noOverworldColor
+	farcall ApplyOverworldColor
+.noOverworldColor
 	call EnableLCD
 	pop af
 	call BankswitchCommon

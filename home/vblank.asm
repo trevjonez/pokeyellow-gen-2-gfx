@@ -5,6 +5,14 @@ VBlank::
 	push de
 	push hl
 
+	; Keep the interrupted code's WRAM bank. The body runs on bank 1, where
+	; Yellow's variables and the stack live. b is saved across the body.
+	ldh a, [rWBK]
+	ld b, a
+	xor a
+	ldh [rWBK], a
+	push bc
+
 	ldh a, [rVBK] ; vram bank
 	push af
 	xor a
@@ -25,9 +33,17 @@ VBlank::
 	ldh [rWY], a
 .ok
 
+	; The scrolled-in row has to land before palette uploads use the rest of vblank.
+	call RedrawRowOrColumn
+
+	ldh a, [hOnCGB]
+	and a
+	jr z, .noColorVBlank
+	farcall YellowColorVBlank
+.noColorVBlank
+
 	call AutoBgMapTransfer
 	call VBlankCopyBgMap
-	call RedrawRowOrColumn
 	call VBlankCopy
 	call VBlankCopyDouble
 	call UpdateMovingBgTiles
@@ -74,6 +90,10 @@ VBlank::
 
 	pop af
 	ldh [rVBK], a
+
+	pop bc
+	ld a, b
+	ldh [rWBK], a
 
 	pop hl
 	pop de

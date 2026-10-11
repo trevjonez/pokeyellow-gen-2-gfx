@@ -4,6 +4,13 @@ PrepareOAMData::
 ; Yellow code has been changed to use registers more efficiently
 ; as well as tweaking the code to show cgb palettes
 
+	; Row and window copies already ran this vblank. Upload palettes now.
+	ldh a, [hOnCGB]
+	and a
+	jr z, .noColorUpload
+	farcall YellowColorUpload
+.noColorUpload
+
 	ld a, [wUpdateSpritesEnabled]
 	dec a
 	jr z, .updateEnabled
@@ -118,6 +125,14 @@ PrepareOAMData::
 	ldh a, [hSpritePriority]
 	or [hl]
 .skipPriority
+	ld b, a
+	ldh a, [hOnCGB]
+	and a
+	ld a, b
+	jr z, .dmgAttr
+	call _ColorOverworldSprite
+	jr .attrDone
+.dmgAttr
 	and $f0
 	bit B_OAM_PAL1, a
 	jr z, .spriteusesOBP0
@@ -126,6 +141,7 @@ PrepareOAMData::
 	ld [de], a
 	inc hl
 	inc e
+.attrDone
 	dec c
 	jr nz, .loop
 

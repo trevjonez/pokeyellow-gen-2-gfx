@@ -1963,11 +1963,21 @@ LoadMapData::
 	call InitMapSprites ; load tile pattern data for sprites
 	call LoadScreenRelatedData
 	call CopyMapViewToVRAM
-	ld a, $01
-	ld [wUpdateSpritesEnabled], a
+	ldh a, [hOnCGB]
+	and a
+	jr z, .dmgPalette
+	ld b, SET_PAL_OVERWORLD
+	call RunPaletteCommand
+	farcall ApplyOverworldColor
+	call EnableLCD
+	jr .paletteDone
+.dmgPalette
 	call EnableLCD
 	ld b, SET_PAL_OVERWORLD
 	call RunPaletteCommand
+.paletteDone
+	ld a, $01
+	ld [wUpdateSpritesEnabled], a
 	call LoadPlayerSpriteGraphics
 	ld a, [wStatusFlags6]
 	and 1 << BIT_DUNGEON_WARP | 1 << BIT_FLY_WARP
@@ -1999,6 +2009,11 @@ ReloadMapAfterSurfingMinigame::
 	call CopyMapViewToVRAM
 	ld de, vBGMap1
 	call CopyMapViewToVRAM2
+	ldh a, [hOnCGB]
+	and a
+	jr z, .noSurfColor
+	farcall ApplyOverworldColor
+.noSurfColor
 	call EnableLCD
 	call ReloadMapSpriteTilePatterns
 	pop af

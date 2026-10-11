@@ -23,6 +23,11 @@ DetermineWildOpponent:
 	callfar TryDoWildEncounter
 	ret nz
 InitBattleCommon:
+	ldh a, [hOnCGB]
+	and a
+	jr z, .keepOverworldColor
+	farcall ClearOverworldColor
+.keepOverworldColor
 	ld a, [wMapPalOffset]
 	push af
 	ld hl, wLetterPrintingDelayFlags

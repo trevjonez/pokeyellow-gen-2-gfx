@@ -700,3 +700,13 @@ MewPicBack::          INCBIN "gfx/pokemon/back/mewb.pic"
 SECTION "bank42", ROMX, BANK[$42]
 
 INCLUDE "data/sgb/sgb_palettes.asm"
+
+
+SECTION "ColorEngine", ROMX, BANK[$43]
+
+INCLUDE "color/init.asm"
+INCLUDE "color/refreshmaps.asm"
+INCLUDE "color/loadpalettes.asm"
+INCLUDE "color/vblank.asm"
+INCLUDE "color/yellow_hooks.asm"
+INCLUDE "color/sprites.asm"

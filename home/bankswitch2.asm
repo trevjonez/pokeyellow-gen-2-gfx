@@ -1,4 +1,5 @@
 BankswitchCommon::
+SetRomBank::
 	ldh [hLoadedROMBank], a
 	ld [rROMB], a
 	ret
