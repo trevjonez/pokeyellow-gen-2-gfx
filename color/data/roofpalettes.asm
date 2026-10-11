@@ -38,8 +38,8 @@ RoofPalettes:
 	dw CeruleanRoof  ; ROUTE_25
 
 PalletRoof:
-	RGB 27,31,27
-	RGB 24,24,24
+	RGB 26,13,7
+	RGB 20,9,4
 
 ViridianRoof:
 	RGB 0,29,7
