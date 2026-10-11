@@ -6353,6 +6353,15 @@ DoBattleTransitionAndInitBattleVariables:
 .next
 	call DelayFrame
 	predef BattleTransition
+; The overworld color engine stays on through the transition so its black
+; tiles use the text palette. Battle palettes take over after that, once
+; the engine has uploaded the black screen's palettes.
+	ldh a, [hOnCGB]
+	and a
+	jr z, .keepOverworldColor
+	call Delay3
+	farcall ClearOverworldColor
+.keepOverworldColor
 	callfar LoadHudAndHpBarAndStatusTilePatterns
 	ld a, $1
 	ldh [hAutoBGTransferEnabled], a
