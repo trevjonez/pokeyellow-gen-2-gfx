@@ -35,3 +35,7 @@
 
 # tools/colormap.py output
 /colormap/
+
+# tools/battlepreview.py output and harness build cache
+/battlepreview/
+/tools/.cache/
