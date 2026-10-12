@@ -55,6 +55,14 @@ Open `battlepreview/index.html` to browse:
 - **Pokémon:** the battle screen with that Pokémon on both sides, front and back sprites.
 - **Trainers:** each trainer class's battle intro, from the transition to "X wants to fight!".
 
+| Move | Pokémon | Trainer intro |
+| --- | --- | --- |
+| <img src="screenshots/battlepreview-flamethrower.gif" width="320" alt="Flamethrower animation"> | <img src="screenshots/battlepreview-charizard.png" width="320" alt="Charizard on both sides"> | <img src="screenshots/battlepreview-lance.gif" width="320" alt="Lance's battle intro"> |
+
+Each move also gets a sheet of its frames, for spotting a single wrong frame:
+
+![Flamethrower frames](screenshots/battlepreview-flamethrower-frames.png)
+
 `--moves`, `--mons` and `--trainers` take constant names from `constants/`. On their own they mean all of that kind, and with no option it captures everything. Other options are `--jobs N` (parallel emulators, one per CPU by default), `--rom FILE` (preview another build, for before/after comparisons) and an output directory.
 
 It needs Python with Pillow, `git` and `gcc`. The first run clones [binjgb](https://github.com/binji/binjgb) and builds `tools/gbharness.c`, a small scripted runner on top of it, into `tools/.cache/`. That file's header lists the script commands if you want to drive the emulator for something else.
