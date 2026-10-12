@@ -4,13 +4,6 @@ PrepareOAMData::
 ; Yellow code has been changed to use registers more efficiently
 ; as well as tweaking the code to show cgb palettes
 
-	; Row and window copies already ran this vblank. Upload palettes now.
-	ldh a, [hOnCGB]
-	and a
-	jr z, .noColorUpload
-	farcall YellowColorUpload
-.noColorUpload
-
 	ld a, [wUpdateSpritesEnabled]
 	dec a
 	jr z, .updateEnabled

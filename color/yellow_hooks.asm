@@ -76,12 +76,18 @@ ApplyOverworldColor::
 	jp LoadMapVramAndColors
 
 ; Called at the start of VBlank, after rWBK has been switched to bank 1.
+; Uploads palettes the line-$6e interrupt prepared, then arms that interrupt
+; for the next frame. Uploading after the vblank copies, as before, landed on
+; line $96 during the battle-start flash, so on hardware a line of slack was
+; enough to miss vblank every frame and the flash never showed. Copies only
+; wait on this when a palette changed (fades, flashes).
 ; Arms the line-$6e interrupt that builds the window attribute buffer.
 ; Building it here pushed AutoBgMapTransfer's attribute DMA past vblank,
 ; and the window colors flickered whenever a text box was up.
 ; Scanline effects (intro, surfing) own STAT while hLCDCPointer is set,
 ; and while the hblank interrupt is still enabled.
 YellowColorVBlank::
+	call YellowColorUpload
 	ldh a, [hLCDCPointer]
 	and a
 	ret nz
@@ -130,7 +136,7 @@ YellowLcdPrepare::
 	ldh [rWBK], a
 	ret
 
-; Called from PrepareOAMData, after the vblank tile copies.
+; Called from YellowColorVBlank, at the start of vblank.
 YellowColorUpload::
 	ld a, 2
 	ldh [rWBK], a
@@ -158,7 +164,7 @@ UploadBgPalettes::
 	and a
 	jr nz, .go
 	ldh a, [rLY]
-	cp $97
+	cp $98 ; through line $97: both uploads (~2.3 lines) still end in vblank
 	jp nc, .done
 	cp $90
 	jp c, .done
@@ -194,7 +200,7 @@ UploadObjPalettes::
 	and a
 	jr nz, .go
 	ldh a, [rLY]
-	cp $97
+	cp $98 ; through line $97: both uploads (~2.3 lines) still end in vblank
 	jp nc, .done
 	cp $90
 	jp c, .done
@@ -215,7 +221,7 @@ ENDR
 	and a
 	jr nz, .townGo
 	ldh a, [rLY]
-	cp $97
+	cp $98 ; through line $97: both uploads (~2.3 lines) still end in vblank
 	jr nc, .done
 	cp $90
 	jr c, .done
