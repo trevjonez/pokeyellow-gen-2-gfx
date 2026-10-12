@@ -526,6 +526,10 @@ YellowRedrawRowOrColumn::
 	ldh [rWBK], a
 	ld a, [W2_UsePerTileColor]
 	ld b, a
+	and a
+	jr nz, .keepPrepared
+	ld [W2_RedrawPalettesReady], a ; drawn without colors: drop what was prepared
+.keepPrepared
 	xor a
 	ldh [rWBK], a
 	ld a, b

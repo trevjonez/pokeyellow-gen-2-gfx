@@ -75,5 +75,10 @@ DEF W2_CopyBgMapPalettesBuffer     EQU $d600 ; 32x6 bytes (DMA-able), $d600-$d6c
 DEF W2_CopyBgMapPalettesFor        EQU $d793
 DEF W2_CopyBgMapRowsLeft           EQU $d794
 
+; Attributes for the queued scroll redraw (wRedrawRowOrColumnSrcTiles), built at
+; line $6e. See PrepareRedrawPalettes.
+DEF W2_RedrawPalettes              EQU $d6c0 ; 2 * SCREEN_WIDTH bytes, $d6c0-$d6e8
+DEF W2_RedrawPalettesReady         EQU $d795
+
 ; In bank 1, the stack starts at $dfff. So, that's also the stack here when bank 2 is
 ; loaded. Don't use anything too close to there.

@@ -6,6 +6,7 @@ GbcPrepareVBlank::
 	ldh [rWBK], a
 	call RefreshWindowPalettesPreVBlank
 	call PrepareCopyBgMapPalettes
+	call PrepareRedrawPalettes
 	call RefreshPalettesPreVBlank
 	xor a
 	ldh [rWBK], a
@@ -47,6 +48,30 @@ ENDR
 	jr nz, .row
 	ldh a, [hVBlankCopyBGSource]
 	ld [W2_CopyBgMapPalettesFor], a
+	ret
+
+; Look up the attributes for a queued scroll redraw so DrawMapRow/DrawMapColumn
+; only copy them. The overworld sets hRedrawRowOrColumnMode after the tiles and
+; destination, so the request is complete once the mode is set. rWBK is 2.
+PrepareRedrawPalettes:
+	ldh a, [hRedrawRowOrColumnMode]
+	and a
+	ret z
+	ld a, [W2_RedrawPalettesReady]
+	and a
+	ret nz
+	ld de, wRedrawRowOrColumnSrcTiles
+	ld hl, W2_RedrawPalettes
+	ld b, HIGH(W2_TilesetPaletteMap)
+REPT 2 * SCREEN_WIDTH ; a column only uses the first 2 * SCREEN_HEIGHT
+	ld a, [de]
+	inc de
+	ld c, a
+	ld a, [bc]
+	ld [hli], a
+ENDR
+	ld a, 1
+	ld [W2_RedrawPalettesReady], a
 	ret
 
 ; Refresh palettes based on BGP and OBP registers

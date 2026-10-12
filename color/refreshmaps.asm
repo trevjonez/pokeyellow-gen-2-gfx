@@ -381,6 +381,83 @@ DrawMapRow::
 	ld a, 1
 	ld [W2_DrewRowOrColumn], a
 
+	ld a, [W2_RedrawPalettesReady]
+	and a
+	jr z, .lookUpPalettes
+	xor a
+	ld [W2_RedrawPalettesReady], a
+
+; Attributes were prepared at line $6e. Each half row is copied in at most two
+; straight runs, split where it wraps from the right edge of the BG map.
+	ld hl, wRedrawRowOrColumnSrcTiles
+	call .copyRowPair
+	ld a, 1
+	ldh [rVBK], a
+	ld hl, W2_RedrawPalettes
+	call .copyRowPair
+	xor a
+	ldh [rWBK], a
+	ldh [rVBK], a
+	ret
+
+; hl = 2 * SCREEN_WIDTH bytes for the upper and lower rows at hRedrawRowOrColumnDest.
+.copyRowPair
+	ldh a, [hRedrawRowOrColumnDest]
+	ld e, a
+	ldh a, [hRedrawRowOrColumnDest + 1]
+	ld d, a
+	push de
+	call .copyHalfRow
+	pop de
+	ld a, TILEMAP_WIDTH
+	add e
+	ld e, a
+	; fallthrough
+
+; hl = SCREEN_WIDTH bytes, de = destination in the BG map.
+.copyHalfRow
+	ld a, e
+	and TILEMAP_WIDTH - 1
+	ld b, a
+	ld a, TILEMAP_WIDTH
+	sub b ; tiles left before the right edge
+	cp SCREEN_WIDTH
+	jr c, .wraps
+	ld c, SCREEN_WIDTH
+	jr .copyRun
+.wraps
+	ld b, a
+	ld c, a
+	call .copyRun
+	ld a, e
+	sub TILEMAP_WIDTH ; back to the start of the row
+	ld e, a
+	ld a, SCREEN_WIDTH
+	sub b
+	ld c, a
+; c = tiles (1-20), two per pass.
+.copyRun
+	srl c
+	jr nc, .copyPairs
+	ld a, [hli]
+	ld [de], a
+	inc e
+	inc c
+	dec c
+	ret z
+.copyPairs
+	ld a, [hli]
+	ld [de], a
+	inc e
+	ld a, [hli]
+	ld [de], a
+	inc e
+	dec c
+	jr nz, .copyPairs
+	ret
+
+.lookUpPalettes
+
 	ld hl, wRedrawRowOrColumnSrcTiles ; This is wram bank 0
 	ldh a, [hRedrawRowOrColumnDest]
 	ld e, a
@@ -469,6 +546,55 @@ DrawMapColumn::
 
 	ld a, 1
 	ld [W2_DrewRowOrColumn], a
+
+	ld a, [W2_RedrawPalettesReady]
+	and a
+	jp z, .lookUpPalettes
+	xor a
+	ld [W2_RedrawPalettesReady], a
+
+; Attributes were prepared at line $6e. Write each row's two tiles and two
+; attributes together, so the step down and the wrap are worked out once.
+	ld hl, wRedrawRowOrColumnSrcTiles
+	ld bc, W2_RedrawPalettes ; stays within one page: inc c
+	ldh a, [hRedrawRowOrColumnDest]
+	ld e, a
+	ldh a, [hRedrawRowOrColumnDest + 1]
+	ld d, a
+REPT SCREEN_HEIGHT
+	ld a, [hli]
+	ld [de], a
+	ld a, 1
+	ldh [rVBK], a
+	ld a, [bc]
+	inc c
+	ld [de], a
+	inc e
+	ld a, [bc]
+	inc c
+	ld [de], a
+	xor a
+	ldh [rVBK], a
+	ld a, [hli]
+	ld [de], a
+	ld a, TILEMAP_WIDTH - 1
+	add e
+	ld e, a
+	jr nc, .fastNoCarry\@
+	inc d
+.fastNoCarry\@
+; wrap from the bottom of the BG map to the top
+	ld a, d
+	and HIGH(TILEMAP_AREA - 1)
+	or HIGH(vBGMap0)
+	ld d, a
+ENDR
+	xor a
+	ldh [hRedrawRowOrColumnMode], a
+	ldh [rWBK], a
+	ret
+
+.lookUpPalettes
 
 	; Draw tiles
 	ld hl, wRedrawRowOrColumnSrcTiles
