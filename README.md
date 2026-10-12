@@ -38,6 +38,29 @@ The output folder is ignored by git.
 
 ![Map viewer](screenshots/colormap-viewer.png)
 
+## Battle preview
+
+`tools/battlepreview.py` plays the built ROM in a headless emulator and captures battle scenes. Run `make` first, then:
+
+```
+tools/battlepreview.py                           # everything
+tools/battlepreview.py --moves EMBER,SAND_ATTACK # just these moves
+tools/battlepreview.py --mons                    # every Pokemon
+tools/battlepreview.py --trainers BROCK          # one trainer intro
+```
+
+Open `battlepreview/index.html` to browse:
+
+- **Moves:** each move's animation, as a GIF and as a sheet of every second frame. Pikachu uses the move on a Snorlax.
+- **Pokémon:** the battle screen with that Pokémon on both sides, front and back sprites.
+- **Trainers:** each trainer class's battle intro, from the transition to "X wants to fight!".
+
+`--moves`, `--mons` and `--trainers` take constant names from `constants/`. On their own they mean all of that kind, and with no option it captures everything. Other options are `--jobs N` (parallel emulators, one per CPU by default), `--rom FILE` (preview another build, for before/after comparisons) and an output directory.
+
+It needs Python with Pillow, `git` and `gcc`. The first run clones [binjgb](https://github.com/binji/binjgb) and builds `tools/gbharness.c`, a small scripted runner on top of it, into `tools/.cache/`. That file's header lists the script commands if you want to drive the emulator for something else.
+
+Some moves only work in a certain setup; `Game.SPECIAL` in the script handles those (Dream Eater on a sleeping target, for example). Mirror Move is skipped because it plays the copied move's animation. `battlepreview/` and `tools/.cache/` are ignored by git.
+
 ---
 
 Original README follows...

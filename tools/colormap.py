@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Render maps with the per-tile GBC color engine's palettes, from source data.
 
-Usage: tools/colormap.py OUTDIR   (run `make` first so the .2bpp files exist)
+Usage: tools/colormap.py [OUTDIR]   (run `make` first so the .2bpp files exist; OUTDIR defaults to colormap/)
 
 Writes:
   OUTDIR/world.png        every map connected to Pallet Town, stitched
