@@ -272,6 +272,110 @@ OverworldColorPaletteCommand::
 	ld d, 1
 	ret
 
+; Move effect sprites use OBJ palettes 2 and 3, which otherwise carry the two
+; Pokemon's colors. Called around PlayAnimation in MoveAnimation, so the move's
+; type picks the effect colors while it plays. Only the OBJ conversion reads
+; W2_AttackPalPointer, so the Pokemon pics (BG) keep their colors through flashes.
+SetAttackTypePalette::
+	ldh a, [hOnCGB]
+	and a
+	ret z
+	ld a, [wAnimationID]
+	and a
+	ret z
+	cp NUM_ATTACKS + 1
+	ret nc ; status and other non-move animations keep their colors
+	ldh a, [hWhoseTurn]
+	and a
+	ld a, [wPlayerMoveType]
+	jr z, .gotType
+	ld a, [wEnemyMoveType]
+.gotType
+	cp NUM_TYPES
+	jr c, .validType
+	xor a ; NORMAL
+.validType
+	ld hl, AttackTypePalettes
+	ld c, a
+	ld b, 0
+	add hl, bc
+	ld c, [hl]
+	; A few moves look wrong in their type's colors.
+	ld a, [wAnimationID]
+	ld b, a
+	ld hl, AttackMovePalettes
+.findMove
+	ld a, [hli]
+	cp -1
+	jr z, .gotPalette
+	cp b
+	ld a, [hli]
+	jr nz, .findMove
+	ld c, a
+.gotPalette
+	ld a, c ; each palette is 4 colors * 2 bytes
+	add a
+	add a
+	add a
+	ld hl, CGBAttackPalettes ; in BANK(SuperPalettes), which DMGPalToCGBPal reads
+	ld c, a
+	ld b, 0
+	add hl, bc
+	ld a, 2
+	ldh [rWBK], a
+	ld a, h
+	ld [W2_AttackPalPointer], a
+	ld a, l
+	ld [W2_AttackPalPointer + 1], a
+	xor a
+	ldh [rWBK], a
+	jr RefreshAttackPalettes
+
+RestoreAttackTypePalette::
+	ldh a, [hOnCGB]
+	and a
+	ret z
+	ld a, 2
+	ldh [rWBK], a
+	xor a
+	ld [W2_AttackPalPointer], a
+	ldh [rWBK], a
+; fallthrough
+; Reconvert OBP0 into the CGB OBJ palettes even if rOBP0 did not change.
+RefreshAttackPalettes:
+	ldh a, [rOBP0]
+	cpl
+	ld [wLastOBP0], a
+	jp UpdateCGBPal_OBP0
+
+; Moves whose effect reads better in another CGBAttackPalettes entry than
+; their type's: move, palette.
+AttackMovePalettes:
+	db SAND_ATTACK, 8 ; tan sand, though the move is Normal
+	db -1
+
+; Index into CGBAttackPalettes for each type.
+AttackTypePalettes:
+	table_width 1
+	db 0 ; NORMAL
+	db 0 ; FIGHTING
+	db 0 ; FLYING
+	db 7 ; POISON
+	db 3 ; GROUND
+	db 3 ; ROCK
+	db 0 ; BIRD
+	db 5 ; BUG
+	db 7 ; GHOST
+	ds UNUSED_TYPES_END - UNUSED_TYPES, 0
+	db 2 ; FIRE
+	db 1 ; WATER
+	db 5 ; GRASS
+	db 4 ; ELECTRIC
+	db 7 ; PSYCHIC_TYPE
+	db 6 ; ICE
+	db 1 ; DRAGON
+	assert_table_length NUM_TYPES
+
 ; The portrait tiles are above the tileset, so they use the window palette (7).
 ; Yellow's palette commands would replace the overworld palettes and attributes.
 LoadPikachuPortraitPalettes::

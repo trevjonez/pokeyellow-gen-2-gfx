@@ -60,5 +60,13 @@ DEF W2_UsePerTileColor             EQU $d78e
 ; Yellow's town-map OBJ colors are left in the sprite palette registers.
 DEF W2_PlainWindowPal              EQU $d78f
 
+; Base palette for OBJ palettes 2 and 3 while a move animation plays (high byte
+; first; 0 = none). See GetAttackObjPalPointer.
+DEF W2_AttackPalPointer            EQU $d790 ; 2 bytes
+
+; Nonzero while SetAnimationBGPalette converts rBGP, so DMGPalToCGBPal blends
+; toward white or black (ToneMapBGP) instead of shuffling colors.
+DEF W2_BGPToneMap                  EQU $d792
+
 ; In bank 1, the stack starts at $dfff. So, that's also the stack here when bank 2 is
 ; loaded. Don't use anything too close to there.

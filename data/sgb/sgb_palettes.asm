@@ -485,3 +485,17 @@ CGBBasePalettes:
 	RGB 31,31,31, 29,19,15, 21,09,05, 00,00,00 ; PAL_LANCE
 	RGB 31,31,31, 28,18,17, 22,07,08, 00,00,00 ; PAL_HERO
 	assert_table_length NUM_SGB_PALS
+
+; Move effect sprites on CGB, picked by the move's type (AttackTypePalettes).
+; Color 3 is a dark shade of the type color rather than black, because most
+; effect frames (lightning balls, flames, bubbles) are drawn in color 3.
+CGBAttackPalettes:
+	RGB 31,31,31, 24,24,24, 13,13,13, 03,03,03 ; gray: Normal, Fighting, Flying
+	RGB 31,31,31, 16,22,31, 06,12,31, 02,04,20 ; blue: Water, Dragon
+	RGB 31,31,31, 31,24,08, 31,12,02, 22,04,00 ; red: Fire
+	RGB 31,31,31, 26,20,10, 18,12,04, 10,06,02 ; brown: Ground, Rock
+	RGB 31,31,31, 31,31,16, 31,29,04, 31,22,00 ; yellow: Electric (balls are solid color 3)
+	RGB 31,31,31, 18,31,10, 06,24,04, 02,14,02 ; green: Grass, Bug
+	RGB 31,31,31, 20,30,31, 09,22,30, 04,12,24 ; ice: Ice
+	RGB 31,31,31, 26,16,30, 18,06,24, 10,02,16 ; purple: Poison, Ghost, Psychic
+	RGB 31,31,31, 31,28,18, 29,23,12, 25,17,07 ; sand: Sand-Attack (AttackMovePalettes)

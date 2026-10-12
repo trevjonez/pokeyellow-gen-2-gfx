@@ -846,6 +846,21 @@ DMGPalToCGBPal::
 	jr nz, .notBGP
 	ldh a, [rBGP]
 	ld [wLastBGP], a
+	ld b, a
+	; Only the held light/dark screens from SetAnimationBGPalette are blended;
+	; flashes reuse some of the same rBGP values but keep the color cycling.
+	ldh a, [rWBK]
+	ld l, a
+	ld a, 2
+	ldh [rWBK], a
+	ld a, [W2_BGPToneMap]
+	ld h, a
+	ld a, l
+	ldh [rWBK], a
+	ld a, h
+	and a
+	ld a, b
+	jp nz, ToneMapBGP
 	jr .convert
 .notBGP
 	dec a
@@ -883,6 +898,174 @@ DMGPalToCGBPal::
 	xor a
 	ld h, a
 	add hl, de
+	ret
+
+; Battle animations hold a lightened or darkened screen by rewriting rBGP.
+; Picking colors by shade index, as on DMG, shuffles each palette's colors on
+; CGB (black outlines turn red, white turns each palette's own dark color, so
+; the screen ends up in mismatched patches). Instead blend each color toward
+; white or black by how far rBGP moves its shade.
+; a = rBGP, de = CGB base palette (in BANK(SuperPalettes)). Fills wCGBPal.
+ToneMapBGP:
+	push bc
+	ld c, a ; shades, two bits per color, color 0 first
+	ld b, 0 ; color index
+	ld hl, wCGBPal
+.loop
+	push bc
+	push de
+	push hl
+	ld a, b
+	add a
+	add e
+	ld l, a
+	ld a, 0
+	adc d
+	ld h, a
+	ld a, BANK(SuperPalettes)
+	call GetFarByte
+	ld e, a
+	inc hl
+	ld a, BANK(SuperPalettes)
+	call GetFarByte
+	ld d, a
+	pop hl
+	ld a, e
+	ld [hli], a
+	ld a, d
+	ld [hld], a
+	pop de
+	pop bc
+	push bc
+	push de
+	push hl
+	ld a, c
+	and %11
+	ld c, a
+	call .ToneColor
+	pop hl
+	pop de
+	pop bc
+	inc hl
+	inc hl
+	srl c
+	srl c
+	inc b
+	ld a, b
+	cp PAL_COLORS
+	jr nz, .loop
+	pop bc
+	ret
+
+; hl = color in wCGBPal, b = its index, c = shade rBGP gives it.
+.ToneColor:
+	ld a, c
+	cp b
+	ret z
+	jr c, .lighter
+	sub b
+	ld d, a ; amount = shade - index
+	ld a, 3
+	sub b
+	ld c, a ; out of 3 - index
+	ld b, d
+	ld e, 1 ; toward black
+	jr .blend
+.lighter
+	ld a, b
+	sub c
+	ld c, b ; out of index
+	ld b, a ; amount = index - shade
+	ld e, 0 ; toward white
+.blend
+	push hl
+	ld a, [hli] ; gggrrrrr
+	push af
+	and %11111
+	ldh [hProduct], a
+	ld a, [hl] ; 0bbbbbgg
+	push af
+	rrca
+	rrca
+	and %11111
+	ldh [hProduct + 2], a
+	pop af
+	and %11
+	add a
+	add a
+	add a
+	ld d, a
+	pop af
+	swap a
+	rrca
+	and %111
+	or d
+	ldh [hProduct + 1], a
+	ldh a, [hProduct]
+	call .ToneChannel
+	ldh [hProduct], a
+	ldh a, [hProduct + 1]
+	call .ToneChannel
+	ldh [hProduct + 1], a
+	ldh a, [hProduct + 2]
+	call .ToneChannel
+	ldh [hProduct + 2], a
+	pop hl
+	ldh a, [hProduct + 1]
+	ld d, a
+	swap a
+	rlca
+	and %11100000
+	ld e, a
+	ldh a, [hProduct]
+	or e
+	ld [hli], a
+	ld a, d
+	rrca
+	rrca
+	rrca
+	and %11
+	ld e, a
+	ldh a, [hProduct + 2]
+	add a
+	add a
+	or e
+	ld [hl], a
+	ret
+
+; a = 5-bit channel, b/c = blend fraction, e = 0 toward white, 1 toward black.
+.ToneChannel:
+	ld d, a
+	bit 0, e
+	jr nz, .toBlack
+	ld a, 31
+	sub d
+	jr .scale
+.toBlack
+	ld a, d
+.scale
+	ld l, a
+	xor a
+	push bc
+.multiply
+	add l
+	dec b
+	jr nz, .multiply
+	ld l, 0
+.divide
+	sub c
+	jr c, .scaled
+	inc l
+	jr .divide
+.scaled
+	pop bc
+	ld a, d
+	bit 0, e
+	jr nz, .darken
+	add l
+	ret
+.darken
+	sub l
 	ret
 
 TransferCurBGPData::
@@ -1044,6 +1227,9 @@ _UpdateCGBPal_OBP::
 		ld e, a
 		ld a, [wCGBBasePalPointers + index * 2 + 1]
 		ld d, a
+		IF index >= 2
+			call GetAttackObjPalPointer
+		ENDC
 		ld a, c
 		call DMGPalToCGBPal
 		ld a, c
@@ -1062,6 +1248,27 @@ _UpdateCGBPal_OBP::
 		call TransferCurOBPData
 	ENDR
 
+	ret
+
+; During a move animation, OBJ palettes 2 and 3 (the effect sprites) use the
+; move type's colors instead of the Pokemon's. c = CONVERT_OBP0/1, de = base palette.
+GetAttackObjPalPointer:
+	ld a, c
+	cp CONVERT_OBP0
+	ret nz
+	ldh a, [rWBK]
+	ld b, a
+	ld a, 2
+	ldh [rWBK], a
+	ld a, [W2_AttackPalPointer]
+	and a
+	jr z, .done ; palettes live in ROMX, so a zero high byte means none
+	ld d, a
+	ld a, [W2_AttackPalPointer + 1]
+	ld e, a
+.done
+	ld a, b
+	ldh [rWBK], a
 	ret
 
 TranslatePalPacketToBGMapAttributes::

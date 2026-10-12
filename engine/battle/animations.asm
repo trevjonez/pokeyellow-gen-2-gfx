@@ -439,7 +439,9 @@ MoveAnimation:
 	bit BIT_BATTLE_ANIMATION, a
 	jr nz, .animationsDisabled
 	call ShareMoveAnimations
+	farcall SetAttackTypePalette
 	call PlayAnimation
+	farcall RestoreAttackTypePalette
 	jr .next
 .animationsDisabled
 	ld c, 30
@@ -1138,7 +1140,21 @@ SetAnimationBGPalette:
 	ld a, c
 .next
 	ldh [rBGP], a
+	ldh a, [hOnCGB]
+	and a
+	jp z, UpdateCGBPal_BGP ; no WRAM banks on DMG, so no flag
+	ld a, 2
+	ldh [rWBK], a
+	ld a, 1
+	ld [W2_BGPToneMap], a ; CGB: lighten/darken instead of shuffling colors
+	xor a
+	ldh [rWBK], a
 	call UpdateCGBPal_BGP
+	ld a, 2
+	ldh [rWBK], a
+	xor a
+	ld [W2_BGPToneMap], a
+	ldh [rWBK], a
 	ret
 
 AnimationUnusedShakeScreen: ; unreferenced
