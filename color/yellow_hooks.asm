@@ -79,9 +79,9 @@ ApplyOverworldColor::
 ; Uploads palettes the line-$6e interrupt prepared, then arms that interrupt
 ; for the next frame. Uploading after the vblank copies landed on line $96
 ; during the battle-start flash, so on hardware a line of slack was enough to
-; miss vblank every frame and the flash never showed. When tile graphics are
-; queued too, upload after them instead (PrepareOAMData), so the ~2.3 lines
-; can't push the copy past vblank. A late upload that runs out of vblank
+; miss vblank every frame and the flash never showed. When a scrolled row or
+; column was just drawn, or tile graphics are queued, upload after the copies
+; instead (PrepareOAMData), so the ~2.3 lines can't push them past vblank. A late upload that runs out of vblank
 ; retries next frame. (The window third can't count here: the flash itself
 ; runs with auto BG transfer on.)
 ; Arms the line-$6e interrupt that builds the window attribute buffer.
@@ -90,7 +90,15 @@ ApplyOverworldColor::
 ; Scanline effects (intro, surfing) own STAT while hLCDCPointer is set,
 ; and while the hblank interrupt is still enabled.
 YellowColorVBlank::
+	ld a, 2
+	ldh [rWBK], a
+	ld hl, W2_DrewRowOrColumn ; set by DrawMapRow/DrawMapColumn, earlier this vblank
+	ld b, [hl]
+	ld [hl], 0
+	xor a
+	ldh [rWBK], a
 	ldh a, [hVBlankCopySize]
+	or b
 	ld b, a
 	ldh a, [hVBlankCopyDoubleSize]
 	or b
