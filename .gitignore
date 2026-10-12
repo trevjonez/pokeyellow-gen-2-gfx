@@ -39,3 +39,4 @@
 # tools/battlepreview.py output and harness build cache
 /battlepreview/
 /tools/.cache/
+!/tools/binjgb-link.patch

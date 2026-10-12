@@ -2,7 +2,7 @@
 """Capture battle scenes from the built ROM: every Pokemon's sprites and every move's animation.
 
 Usage: tools/battlepreview.py [OUTDIR] [--moves [NAME,...]] [--mons [NAME,...]] [--trainers [NAME,...]]
-                             [--jobs N] [--rom ROM]
+                             [--link [TRADE,BATTLE]] [--jobs N] [--rom ROM]
        (run `make` first; OUTDIR defaults to battlepreview/; no kind given = all kinds,
        a kind with no list = all of that kind)
 
@@ -11,6 +11,8 @@ Writes:
   OUTDIR/moves/NAME.png    contact sheet of the move's animation, every 2nd frame
   OUTDIR/moves/NAME.gif    the animation at full speed
   OUTDIR/trainers/NAME.png the trainer battle intro, every 2nd frame, and .gif at full speed
+  OUTDIR/link/TRADE.gif    two linked Game Boys side by side: Cable Club, Trade Center, a full trade
+  OUTDIR/link/BATTLE.gif   the same into the Colosseum and a link battle; .png sheets sample them
   OUTDIR/index.html        a page to browse them
 
 How: tools/gbharness.c (a scripted headless runner on binjgb) is built on first use into
@@ -20,6 +22,12 @@ party Pokemon and wCurOpponent into WRAM (the overworld loop starts a battle whe
 wCurOpponent is set), taps A through the intro, picks the first move and records frames
 while wAnimationID is set. Moves that need a setup turn or fail on the first turn
 (Dream Eater, Mirror Move, Counter, ...) may show only the first part or nothing.
+
+Link captures patch binjgb with a link cable (tools/binjgb-link.patch). From the snapshot the
+player warps to the Viridian Pokemon Center and walks to the Cable Club receptionist, then the
+harness copies the machine into a second one on the other end of the cable. Both talk to the
+receptionist and go through the menus with fixed button timings, so a build that changes how
+long those screens take may need the waits adjusted.
 """
 
 import os
@@ -37,9 +45,9 @@ BINJGB_COMMIT = '1662111'
 HARNESS = os.path.join(CACHE, 'gbharness')
 ROM_PATH = os.path.join(ROOT, 'pokeyellow.gbc')   # --rom picks another build (same WRAM layout)
 
-A, DOWN = 1, 128
-SEND_OUT_ANIM = 0xc3
-OPP_ID_OFFSET = 200    # wCurOpponent >= this starts a battle against trainer class (id - 200)   # wAnimationID while your Pokemon comes out of its ball
+A, RIGHT, LEFT, UP, DOWN = 1, 16, 32, 64, 128
+SEND_OUT_ANIM = 0xc3   # wAnimationID while your Pokemon comes out of its ball
+OPP_ID_OFFSET = 200    # wCurOpponent >= this starts a battle against trainer class (id - 200)
 
 
 def sym(name):
@@ -67,13 +75,15 @@ def consts(path):
 
 def build_harness():
     src = os.path.join(ROOT, 'tools', 'gbharness.c')
-    if os.path.exists(HARNESS) and os.path.getmtime(HARNESS) > os.path.getmtime(src):
+    patch = os.path.join(ROOT, 'tools', 'binjgb-link.patch')   # adds a link cable
+    if os.path.exists(HARNESS) and os.path.getmtime(HARNESS) > max(map(os.path.getmtime, (src, patch))):
         return
     repo = os.path.join(CACHE, 'binjgb')
     if not os.path.exists(repo):
         os.makedirs(CACHE, exist_ok=True)
         subprocess.run(['git', 'clone', '-q', BINJGB_URL, repo], check=True)
-        subprocess.run(['git', '-C', repo, 'checkout', '-q', BINJGB_COMMIT], check=True)
+    subprocess.run(['git', '-C', repo, 'checkout', '-q', '-f', BINJGB_COMMIT], check=True)
+    subprocess.run(['git', '-C', repo, 'apply', patch], check=True)
     subprocess.run(['gcc', '-O2', '-std=gnu11', '-w', '-I', os.path.join(repo, 'src'), '-o', HARNESS, src,
                     *(os.path.join(repo, 'src', f) for f in ('memory.c', 'common.c', 'emulator-debug.c')),
                     '-lm'], check=True)
@@ -140,10 +150,9 @@ class Game:
         h.send(f"poke {a['wOptions']} 1")
         h.send('save')
 
-    def start_battle(self, h, player, enemy, move, speed=3, delay=0, trainer_no=1):
+    def set_party(self, h, player, move, speed=3):
+        """One level 50 Pokemon named A (OT A) knowing only `move`, and all badges."""
         a = self.addr
-        h.send('load', f'frames {delay}')
-        h.send(f"poke {a['wTrainerNo']} {trainer_no}")   # which party, when enemy is a trainer class
         pokes = {a['wPartyCount']: 1, a['wPartySpecies']: player, a['wPartySpecies'] + 1: 0xff,
                  a['wPartyMon1Species']: player, a['wPartyMon1HP']: 0, a['wPartyMon1HP'] + 1: 200,
                  a['wPartyMon1BoxLevel']: 50, a['wPartyMon1Status']: 0,
@@ -166,6 +175,12 @@ class Game:
             pokes[a['wPartyMonOT'] + i] = v
         for addr, v in pokes.items():
             h.send(f'poke {addr} {v}')
+
+    def start_battle(self, h, player, enemy, move, speed=3, delay=0, trainer_no=1):
+        a = self.addr
+        h.send('load', f'frames {delay}')
+        h.send(f"poke {a['wTrainerNo']} {trainer_no}")   # which party, when enemy is a trainer class
+        self.set_party(h, player, move, speed)
         h.send(f"poke {a['wCurOpponent']} {enemy}")
         h.reply(f"wait {a['wIsInBattle']} {2 if enemy >= OPP_ID_OFFSET else 1} 600", 'wait')
         if enemy == self.mons.index('MAROWAK'):
@@ -256,21 +271,158 @@ class Game:
         return frames
 
 
+class LinkCable:
+    """Two copies of the game on either end of a link cable, recorded side by side."""
+    STEP = 4   # frames between recorded frames
+
+    def __init__(self, game, h, outdir, name):
+        self.game, self.h, self.outdir, self.name = game, h, outdir, name
+        self.frames = []   # [(machine 0 ppm, machine 1 ppm)]
+        self.a = {n: sym(n) for n in ('wCurMap', 'wYCoord', 'wXCoord', 'wWarpEntries', 'wEventFlags',
+                                       'wPlayerName', 'wCurrentMenuItem')}
+
+    def walk_to(self, y, x, yfirst=False):
+        """Step toward (y, x), one tile per press; True once there."""
+        h, a = self.h, self.a
+        for _ in range(80):
+            cy, cx = h.peek(a['wYCoord']), h.peek(a['wXCoord'])
+            if (cy, cx) == (y, x):
+                return True
+            if yfirst and cy != y or cx == x:
+                btn = DOWN if cy < y else UP
+            else:
+                btn = RIGHT if cx < x else LEFT
+            h.send(f'buttons {btn}', 'frames 8', 'buttons 0', 'frames 10')
+        return False
+
+    def to_receptionist(self):
+        """From the snapshot in Red's room to facing the Viridian Pokemon Center's Cable Club desk."""
+        h, a = self.h, self.a
+        h.send('load')
+        # EVENT_GOT_POKEDEX (bit 37) opens the Cable Club.
+        h.send(f"poke {a['wEventFlags'] + 4} {h.peek(a['wEventFlags'] + 4) | 0x20}")
+        # Send the stairs (warp 0) to VIRIDIAN_POKECENTER's door instead of downstairs.
+        h.send(f"poke {a['wWarpEntries'] + 2} 0", f"poke {a['wWarpEntries'] + 3} {0x29}")
+        route = [((6, 5), False), ((1, 5), True), ((1, 6), False)]   # around the plant to the stairs
+        for (y, x), yfirst in route:
+            assert self.walk_to(y, x, yfirst), (y, x)
+        h.send(f'buttons {RIGHT}', 'frames 16', 'buttons 0', 'frames 120')
+        assert h.peek(a['wCurMap']) == 0x29, 'did not reach the Pokemon Center'
+        for y, x in ((6, 3), (5, 3), (5, 11), (4, 11)):   # below the plants, to the desk
+            assert self.walk_to(y, x), (y, x)
+        h.send(f'buttons {UP}', 'frames 4', 'buttons 0', 'frames 10')
+
+    def connect(self, parties, names=('RED', 'BLUE')):
+        """Copy the machine to the other end of the cable and give each side a party and name."""
+        h, g = self.h, self.game
+        h.send('link')
+        for m, (species, name) in enumerate(zip(parties, names)):
+            h.send(f'use {m}')
+            g.set_party(h, g.mons.index(species), g.moves.index('TACKLE'))
+            for i, c in enumerate(name.encode() + b'\x50'):   # A-Z are $80-$99, "@" ends it
+                h.send(f"poke {self.a['wPlayerName'] + i} {c + 0x3f if c != 0x50 else c}")
+
+    def press(self, button, hold=4, wait=0):
+        for m in (0, 1):
+            self.h.send(f'use {m}', f'buttons {button}', f'frames {hold}', 'buttons 0')
+        self.wait(wait)
+
+    def wait(self, n):
+        for _ in range(0, n, self.STEP):
+            self.h.send(f'frames {self.STEP}')
+            pair = tuple(os.path.join(self.outdir, f'{self.name}.{len(self.frames):04d}.{m}.ppm') for m in (0, 1))
+            for m, p in enumerate(pair):
+                self.h.send(f'use {m}', f'shot {p}')
+            self.frames.append(pair)
+
+    def wait_still(self, limit, still=300, keep=60):
+        """Record until neither screen has changed for `still` frames, then drop all but
+        `keep` frames of that idle tail. The trade pauses for up to ~150 frames midway."""
+        same = 0
+        for _ in range(0, limit, self.STEP):
+            self.wait(self.STEP)
+            self.h.peek(0)   # sync: shots written
+            if len(self.frames) > 1 and all(open(a, 'rb').read() == open(b, 'rb').read()
+                                            for a, b in zip(self.frames[-1], self.frames[-2])):
+                same += self.STEP
+                if same >= still:
+                    break
+            else:
+                same = 0
+        for pair in self.frames[len(self.frames) - (same - keep) // self.STEP:]:
+            for p in pair:
+                os.remove(p)
+        del self.frames[len(self.frames) - (same - keep) // self.STEP:]
+
+    def enter_club(self, menu_downs):
+        """Talk to the receptionist on both sides, save, and pick a room from the menu."""
+        h = self.h
+        # The second player talks a few frames later; with both on the same frame, both
+        # would keep trying to drive the clock and never connect.
+        h.send('use 0', f'buttons {A}', 'frames 3', 'buttons 0', 'use 1', 'frames 5',
+               f'buttons {A}', 'frames 3', 'buttons 0')
+        self.wait(240)
+        for _ in range(4):   # "Please apply here", save the game? yes, saving, the room menu
+            self.press(A, wait=52)
+        self.wait(60)
+        for _ in range(menu_downs):   # the link menu polls slowly: hold for it to see the press
+            self.press(DOWN, hold=8, wait=20)
+        for _ in range(3):
+            self.press(A, wait=52)
+        self.wait(120)
+        assert all((h.send(f'use {m}'), h.peek(self.a['wCurMap']))[1] == 0xef + menu_downs for m in (0, 1)), \
+            'did not enter the link room'
+        # Sit facing the table: player 0 on the left, player 1 on the right.
+        h.send('use 0', f'buttons {RIGHT}', 'frames 3', 'buttons 0',
+               'use 1', f'buttons {LEFT}', 'frames 3', 'buttons 0')
+        self.wait(20)
+
+    def trade(self):
+        self.enter_club(0)
+        self.press(A, wait=60)
+        self.press(A, wait=300)        # the party lists
+        self.press(A, wait=60)         # first Pokemon: STATS / TRADE
+        self.press(RIGHT, hold=6, wait=30)
+        for _ in range(8):             # TRADE, confirm, and through the prompts on both sides
+            self.press(A, wait=40)
+        self.wait_still(6000)          # both ways, "Trade completed!", back to the lists
+
+    def battle(self):
+        self.enter_club(1)
+        for _ in range(30):            # into the battle, FIGHT, TACKLE, one turn each
+            self.press(A, wait=50)
+
+    def finish(self):
+        """Join each pair of frames side by side; returns the joined PNG paths."""
+        self.h.peek(0)
+        paths = []
+        for pair in self.frames:
+            im = Image.new('RGB', (330, 144), (30, 30, 30))
+            for m, p in enumerate(pair):
+                im.paste(Image.open(p), (m * 170, 0))
+                os.remove(p)
+            paths.append(pair[0][:-6] + '.png')
+            im.save(paths[-1])
+        return paths
+
+
 def still_part(ppm):
     """The rows of a 160x144 PPM above the battle text box."""
     data = open(ppm, 'rb').read()
     return data[-160 * 144 * 3:][:160 * 96 * 3]
 
 
-def contact_sheet(paths, out_png, out_gif, cols=8):
+def contact_sheet(paths, out_png, out_gif, cols=8, every=1, duration=33):
+    """Sheet of the distinct frames (every `every`th of them) and a GIF of all of them."""
     imgs = [Image.open(p).convert('RGB') for p in paths]
-    uniq = [im for i, im in enumerate(imgs) if i == 0 or im.tobytes() != imgs[i - 1].tobytes()]
+    uniq = [im for i, im in enumerate(imgs) if i == 0 or im.tobytes() != imgs[i - 1].tobytes()][::every]
+    w, h = imgs[0].width + 2, imgs[0].height + 2
     rows = (len(uniq) + cols - 1) // cols
-    sheet = Image.new('RGB', (cols * 162, rows * 146), (30, 30, 30))
+    sheet = Image.new('RGB', (cols * w, rows * h), (30, 30, 30))
     for i, im in enumerate(uniq):
-        sheet.paste(im, ((i % cols) * 162 + 1, (i // cols) * 146 + 1))
+        sheet.paste(im, ((i % cols) * w + 1, (i // cols) * h + 1))
     sheet.save(out_png)
-    imgs[0].save(out_gif, save_all=True, append_images=imgs[1:], duration=33, loop=0)
+    imgs[0].save(out_gif, save_all=True, append_images=imgs[1:], duration=duration, loop=0)
     for p in paths:
         os.remove(p)
     return len(uniq)
@@ -289,6 +441,19 @@ def worker(game, jobs, outdir):
             Image.open(ppm).resize((320, 288), Image.NEAREST).save(ppm[:-4] + '.png')
             os.remove(ppm)
             done.append((kind, name, 1))
+        elif kind == 'link':
+            link_h = Harness()   # two machines from here on, so not the shared one
+            game.boot(link_h)
+            cable = LinkCable(game, link_h, os.path.join(outdir, 'link'), ident)
+            cable.to_receptionist()
+            cable.connect(('PIKACHU', 'CHARMANDER'))
+            getattr(cable, ident.lower())()
+            frames = cable.finish()
+            link_h.close()
+            n = contact_sheet(frames, os.path.join(outdir, 'link', ident + '.png'),
+                              os.path.join(outdir, 'link', ident + '.gif'),
+                              cols=4, every=16, duration=cable.STEP * 1000 // 60)
+            done.append((kind, ident, n))
         elif kind == 'trainer':
             name, (cls, no) = ident
             frames = game.trainer_frames(h, cls, no, os.path.join(outdir, 'trainers'), name)
@@ -310,6 +475,10 @@ def write_index(outdir, counts):
     """Lists everything in OUTDIR, so partial runs add to earlier ones."""
     mons = sorted(f[:-4] for f in os.listdir(os.path.join(outdir, 'mons')) if f.endswith('.png'))
     trainers = sorted(f[:-4] for f in os.listdir(os.path.join(outdir, 'trainers')) if f.endswith('.png'))
+    links = sorted(f[:-4] for f in os.listdir(os.path.join(outdir, 'link')) if f.endswith('.png'))
+    cable = ''.join(f'<section><h3>{n}</h3><img class="gif" src="link/{n}.gif" alt="{n} over a link cable" '
+                    f'loading="lazy" style="width:660px"><img src="link/{n}.png" alt="{n} frames" loading="lazy">'
+                    '</section>' for n in links)
     intros = ''.join(f'<section><h3>{n}</h3><img class="gif" src="trainers/{n}.gif" alt="{n} intro" loading="lazy">'
                      f'<img src="trainers/{n}.png" alt="{n} frames" loading="lazy"></section>' for n in trainers)
     names = sorted({f[:-4] for f in os.listdir(os.path.join(outdir, 'moves')) if f.endswith('.png')} | set(counts))
@@ -331,10 +500,11 @@ nav a{{margin-right:12px;color:inherit}} h2{{border-bottom:1px solid var(--line)
 img{{image-rendering:pixelated;max-width:100%}} .gif{{width:320px;margin-right:12px;vertical-align:top}}
 section{{margin:0 0 18px}} h3{{margin:0 0 4px;font-size:15px}} small{{color:var(--mut);font-weight:normal}}
 </style>
-<nav><a href="#moves">Moves ({len(moves)})</a><a href="#mons">Pok&eacute;mon ({len(mons)})</a><a href="#trainers">Trainers ({len(trainers)})</a></nav>
+<nav><a href="#moves">Moves ({len(moves)})</a><a href="#mons">Pok&eacute;mon ({len(mons)})</a><a href="#trainers">Trainers ({len(trainers)})</a><a href="#link">Link cable ({len(links)})</a></nav>
 <h2 id="moves">Moves</h2>{rows}
 <h2 id="mons">Pok&eacute;mon</h2><div class="mons">{cards}</div>
-<h2 id="trainers">Trainers</h2>{intros}'''
+<h2 id="trainers">Trainers</h2>{intros}
+<h2 id="link">Link cable</h2><p>Player 1 (left) and player 2 (right), joined by a cable.</p>{cable}'''
     open(os.path.join(outdir, 'index.html'), 'w').write(page)
 
 
@@ -345,20 +515,23 @@ def main():
                         '' if args.index(flag) + 1 == len(args) or args[args.index(flag) + 1].startswith('--')
                         else args[args.index(flag) + 1])
     outdir = next((a for a in args if not a.startswith('--') and a not in
-                   (opt('--moves'), opt('--mons'), opt('--trainers'), opt('--jobs'), opt('--rom'))),
+                   (opt('--moves'), opt('--mons'), opt('--trainers'), opt('--link'), opt('--jobs'), opt('--rom'))),
                   os.path.join(ROOT, 'battlepreview'))
     if opt('--rom'):
         global ROM_PATH
         ROM_PATH = os.path.abspath(opt('--rom'))
-    for sub in ('mons', 'moves', 'trainers'):
+    for sub in ('mons', 'moves', 'trainers', 'link'):
         os.makedirs(os.path.join(outdir, sub), exist_ok=True)
     build_harness()
     game = Game()
     want_moves = None if opt('--moves') is None else opt('--moves').upper().split(',') if opt('--moves') else []
     want_mons = None if opt('--mons') is None else opt('--mons').upper().split(',') if opt('--mons') else []
     want_trainers = None if opt('--trainers') is None else opt('--trainers').upper().split(',') if opt('--trainers') else []
-    everything = want_moves is None and want_mons is None and want_trainers is None
+    want_link = None if opt('--link') is None else opt('--link').upper().split(',') if opt('--link') else []
+    everything = want_moves is None and want_mons is None and want_trainers is None and want_link is None
     jobs = []
+    if want_link is not None or everything:
+        jobs += [('link', n) for n in ('TRADE', 'BATTLE') if not want_link or n in want_link]
     if want_moves is not None or everything:
         jobs += [('move', i) for i, n in enumerate(game.moves)
                  if n and n != 'STRUGGLE' and n not in Game.NO_ANIMATION
@@ -376,7 +549,8 @@ def main():
     write_index(outdir, {name: c for k, name, c in results if k == 'move'})
     empty = [name for k, name, c in results if k == 'move' and not c]
     count = lambda kind: sum(k == kind for k, _, _ in results)
-    print(f'{count("move")} moves, {count("mon")} Pokemon, {count("trainer")} trainers -> {outdir}')
+    print(f'{count("move")} moves, {count("mon")} Pokemon, {count("trainer")} trainers, '
+          f'{count("link")} link captures -> {outdir}')
     if empty:
         print('no animation captured:', ' '.join(empty))
 

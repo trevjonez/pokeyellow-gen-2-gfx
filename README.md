@@ -47,6 +47,7 @@ tools/battlepreview.py                           # everything
 tools/battlepreview.py --moves EMBER,SAND_ATTACK # just these moves
 tools/battlepreview.py --mons                    # every Pokemon
 tools/battlepreview.py --trainers BROCK          # one trainer intro
+tools/battlepreview.py --link                    # link cable trade and battle
 ```
 
 Open `battlepreview/index.html` to browse:
@@ -54,18 +55,25 @@ Open `battlepreview/index.html` to browse:
 - **Moves:** each move's animation, as a GIF and as a sheet of every second frame. Pikachu uses the move on a Snorlax.
 - **Pokémon:** the battle screen with that Pokémon on both sides, front and back sprites.
 - **Trainers:** each trainer class's battle intro, from the transition to "X wants to fight!".
+- **Link cable:** two Game Boys joined by a cable, side by side. `TRADE` goes from the Cable Club receptionist through the Trade Center to a full trade. `BATTLE` goes through the Colosseum into a link battle.
 
 | Move | Pokémon | Trainer intro |
 | --- | --- | --- |
 | <img src="screenshots/battlepreview-flamethrower.gif" width="320" alt="Flamethrower animation"> | <img src="screenshots/battlepreview-charizard.png" width="320" alt="Charizard on both sides"> | <img src="screenshots/battlepreview-lance.gif" width="320" alt="Lance's battle intro"> |
 
+With `--link`, two copies of the game run side by side on a scripted link cable. Player 1 is on the left:
+
+<img src="screenshots/battlepreview-link-trade.gif" width="660" alt="A link cable trade on two Game Boys">
+
+<img src="screenshots/battlepreview-link-battle.gif" width="660" alt="A link battle on two Game Boys">
+
 Each move also gets a sheet of its frames, for spotting a single wrong frame:
 
 ![Flamethrower frames](screenshots/battlepreview-flamethrower-frames.png)
 
-`--moves`, `--mons` and `--trainers` take constant names from `constants/`. On their own they mean all of that kind, and with no option it captures everything. Other options are `--jobs N` (parallel emulators, one per CPU by default), `--rom FILE` (preview another build, for before/after comparisons) and an output directory.
+`--moves`, `--mons` and `--trainers` take constant names from `constants/`, and `--link` takes `TRADE` or `BATTLE`. On their own they mean all of that kind, and with no option it captures everything. Other options are `--jobs N` (parallel emulators, one per CPU by default), `--rom FILE` (preview another build, for before/after comparisons) and an output directory.
 
-It needs Python with Pillow, `git` and `gcc`. The first run clones [binjgb](https://github.com/binji/binjgb) and builds `tools/gbharness.c`, a small scripted runner on top of it, into `tools/.cache/`. That file's header lists the script commands if you want to drive the emulator for something else.
+It needs Python with Pillow, `git` and `gcc`. The first run clones [binjgb](https://github.com/binji/binjgb), applies `tools/binjgb-link.patch` (a link cable between two emulators in one process), and builds `tools/gbharness.c`, a small scripted runner on top of it, into `tools/.cache/`. That file's header lists the script commands if you want to drive the emulator for something else.
 
 Some moves only work in a certain setup; `Game.SPECIAL` in the script handles those (Dream Eater on a sleeping target, for example). Mirror Move is skipped because it plays the copied move's animation. `battlepreview/` and `tools/.cache/` are ignored by git.
 

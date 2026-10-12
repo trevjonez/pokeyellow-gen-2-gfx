@@ -14,24 +14,38 @@
  *   shot PATH            write the current frame as a binary PPM
  *   save / load          snapshot / restore the whole machine in memory
  *   echo TEXT            print TEXT (handy to delimit output)
+ *   link                 copy this machine into a second one joined by a link cable
+ *                        (tools/binjgb-link.patch); frames then runs both in lockstep
+ *   use N                send later commands to machine N (0 or 1)
  */
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "emulator-debug.h"
 
-static JoypadButtons s_buttons;
+void emulator_link(Emulator*, Emulator*);   /* from tools/binjgb-link.patch */
+
+static Emulator* s_emu[2];
+static int s_count = 1;
+static JoypadButtons s_buttons[2];
 
 static void joypad_callback(JoypadButtons* joyp, void* user_data) {
-  (void)user_data;
-  *joyp = s_buttons;
+  *joyp = s_buttons[(intptr_t)user_data];
 }
 
-static void run_frames(Emulator* e, int n) {
-  for (int i = 0; i < n; i++) {
-    Ticks until = emulator_get_ticks(e) + PPU_FRAME_TICKS;
-    while (!(emulator_run_until(e, until) & EMULATOR_EVENT_UNTIL_TICKS)) {
+/* Linked machines run in slices of a few scanlines, so neither gets far ahead
+ * of the other while they swap bytes. */
+#define LINK_SLICE_TICKS (PPU_FRAME_TICKS / 32)
+
+static void run_frames(int n) {
+  Ticks slice = s_count == 1 ? PPU_FRAME_TICKS : LINK_SLICE_TICKS;
+  for (Ticks t = 0; t < (Ticks)n * PPU_FRAME_TICKS; t += slice) {
+    for (int i = 0; i < s_count; i++) {
+      Ticks until = emulator_get_ticks(s_emu[i]) + slice;
+      while (!(emulator_run_until(s_emu[i], until) & EMULATOR_EVENT_UNTIL_TICKS)) {
+      }
     }
   }
 }
@@ -86,20 +100,34 @@ int main(int argc, char** argv) {
   init.audio_frequency = 44100;
   init.audio_frames = 4410 * SOUND_OUTPUT_COUNT;
   init.random_seed = 1;
-  Emulator* e = emulator_new(&init);
+  Emulator* e = s_emu[0] = emulator_new(&init);
   if (!e) return 1;
   emulator_set_rom_usage_enabled(FALSE);
   if (strcmp(argv[2], "-") != 0 && !SUCCESS(emulator_read_ext_ram_from_file(e, argv[2]))) return 1;
-  emulator_set_joypad_callback(e, joypad_callback, NULL);
+  emulator_set_joypad_callback(e, joypad_callback, (void*)0);
 
-  FileData snapshot = {0};
+  FileData snapshots[2] = {{0}};
+  int cur = 0;
   char line[1024], arg[1000];
   int a, b, c;
   while (fgets(line, sizeof(line), stdin)) {
     if (sscanf(line, "frames %i", &a) == 1) {
-      run_frames(e, a);
+      run_frames(a);
+    } else if (sscanf(line, "use %i", &a) == 1 && a >= 0 && a < s_count) {
+      cur = a;
+      e = s_emu[cur];
+    } else if (strncmp(line, "link", 4) == 0 && s_count == 1) {
+      FileData state;
+      emulator_init_state_file_data(&state);
+      emulator_write_state(e, &state);
+      s_emu[1] = emulator_new(&init);
+      emulator_read_state(s_emu[1], &state);
+      file_data_delete(&state);
+      emulator_set_joypad_callback(s_emu[1], joypad_callback, (void*)1);
+      emulator_link(s_emu[0], s_emu[1]);
+      s_count = 2;
     } else if (sscanf(line, "buttons %i", &a) == 1) {
-      s_buttons = (JoypadButtons){.A = a & 1, .B = (a >> 1) & 1, .select = (a >> 2) & 1,
+      s_buttons[cur] = (JoypadButtons){.A = a & 1, .B = (a >> 1) & 1, .select = (a >> 2) & 1,
                                   .start = (a >> 3) & 1, .right = (a >> 4) & 1, .left = (a >> 5) & 1,
                                   .up = (a >> 6) & 1, .down = (a >> 7) & 1};
     } else if (sscanf(line, "poke %i %i", &a, &b) == 2) {
@@ -113,18 +141,18 @@ int main(int argc, char** argv) {
     } else if (sscanf(line, "wait %i %i %i", &a, &b, &c) == 3) {
       int n = 0;
       while (n < c && peek(e, a) != (u8)b) {
-        run_frames(e, 1);
+        run_frames(1);
         n++;
       }
       if (peek(e, a) == (u8)b) printf("wait %d\n", n); else printf("wait timeout\n");
     } else if (sscanf(line, "shot %999s", arg) == 1) {
       shot(e, arg);
     } else if (strncmp(line, "save", 4) == 0) {
-      file_data_delete(&snapshot);
-      emulator_init_state_file_data(&snapshot);
-      emulator_write_state(e, &snapshot);
+      file_data_delete(&snapshots[cur]);
+      emulator_init_state_file_data(&snapshots[cur]);
+      emulator_write_state(e, &snapshots[cur]);
     } else if (strncmp(line, "load", 4) == 0) {
-      emulator_read_state(e, &snapshot);
+      emulator_read_state(e, &snapshots[cur]);
     } else if (sscanf(line, "echo %999[^\n]", arg) == 1) {
       printf("%s\n", arg);
     }

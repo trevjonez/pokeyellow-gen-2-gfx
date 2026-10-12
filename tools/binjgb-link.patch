@@ -1,0 +1,67 @@
+diff --git i/src/emulator.c w/src/emulator.c
+index 11b6bcb..9487f41 100644
+--- i/src/emulator.c
++++ w/src/emulator.c
+@@ -477,6 +477,7 @@ typedef struct {
+   Bool transferring;
+   u8 sb; /* Serial transfer data. */
+   u8 transferred_bits;
++  u8 link_in; /* Byte from the linked peer, shifted in when the transfer ends. */
+ } Serial;
+ 
+ typedef struct {
+@@ -1051,6 +1052,7 @@ static void serial_synchronize(Emulator*);
+ static void timer_synchronize(Emulator*);
+ static void calculate_next_ppu_intr(Emulator*);
+ static void calculate_next_serial_intr(Emulator*);
++static u8 serial_link_exchange(Emulator*, u8 out);
+ 
+ static MemoryTypeAddressPair make_pair(MemoryMapType type, Address addr) {
+   MemoryTypeAddressPair result;
+@@ -2640,6 +2642,9 @@ static void write_io(Emulator* e, MaskedAddress addr, u8 value) {
+       if (SERIAL.transferring) {
+         SERIAL.tick_count = 0;
+         SERIAL.transferred_bits = 0;
++        if (SERIAL.clock == SERIAL_CLOCK_INTERNAL) {
++          SERIAL.link_in = serial_link_exchange(e, SERIAL.sb);
++        }
+       }
+       calculate_next_serial_intr(e);
+       break;
+@@ -4039,6 +4044,28 @@ static void hdma_copy_byte(Emulator* e) {
+   }
+ }
+ 
++/* Link cable between two emulators in one process, at byte granularity: when one
++ * side starts an internal-clock transfer and the other is waiting on an external
++ * clock, they swap bytes. Otherwise the master reads $FF, as with no cable. */
++static Emulator* s_link[2];
++
++void emulator_link(Emulator* a, Emulator* b) {
++  s_link[0] = a;
++  s_link[1] = b;
++}
++
++static u8 serial_link_exchange(Emulator* e, u8 out) {
++  Emulator* peer = e == s_link[0] ? s_link[1] : e == s_link[1] ? s_link[0] : NULL;
++  if (!peer) return 0xff;
++  Serial* ps = &peer->state.serial;
++  if (!ps->transferring || ps->clock != SERIAL_CLOCK_EXTERNAL) return 0xff;
++  u8 in = ps->sb;
++  ps->sb = out;
++  ps->transferring = 0;
++  peer->state.interrupt.new_if |= IF_SERIAL;
++  return in;
++}
++
+ static void calculate_next_serial_intr(Emulator* e) {
+   if (!SERIAL.transferring || SERIAL.clock != SERIAL_CLOCK_INTERNAL) {
+     SERIAL.next_intr_ticks = INVALID_TICKS;
+@@ -4070,6 +4097,7 @@ static void serial_synchronize(Emulator* e) {
+           SERIAL.sb = (SERIAL.sb << 1) | 1;
+           SERIAL.transferred_bits++;
+           if (VALUE_WRAPPED(SERIAL.transferred_bits, 8)) {
++            SERIAL.sb = SERIAL.link_in;
+             SERIAL.transferring = 0;
+             INTR.new_if |= IF_SERIAL;
+             SERIAL.sync_ticks = TICKS - delta_ticks;
