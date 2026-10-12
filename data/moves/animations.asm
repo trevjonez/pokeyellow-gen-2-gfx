@@ -770,8 +770,9 @@ NightShadeAnim:
 	db -1 ; end
 
 MimicAnim:
-	battle_anim MIMIC, SUBANIM_0_CIRCLES_1_SQUARES_CENTERING_ENEMY, 1, 6
-	battle_anim MIMIC, SUBANIM_0_CIRCLE_1_SQUARE_TOSS_BACK, 1, 6
+	; Tileset 0 draws these as orbs; tileset 1 (the Gen 1 choice) as solid squares.
+	battle_anim MIMIC, SUBANIM_0_CIRCLES_1_SQUARES_CENTERING_ENEMY, 0, 6
+	battle_anim MIMIC, SUBANIM_0_CIRCLE_1_SQUARE_TOSS_BACK, 0, 6
 	db -1 ; end
 
 ScreechAnim:
@@ -1029,8 +1030,9 @@ SkyAttackAnim:
 	db -1 ; end
 
 TransformAnim:
-	battle_anim TRANSFORM, SUBANIM_0_CIRCLES_1_SQUARES_CENTERING_ENEMY, 1, 6
-	battle_anim TRANSFORM, SUBANIM_0_CIRCLE_1_SQUARE_TOSS_BACK, 1, 4
+	; Orbs, like Mimic.
+	battle_anim TRANSFORM, SUBANIM_0_CIRCLES_1_SQUARES_CENTERING_ENEMY, 0, 6
+	battle_anim TRANSFORM, SUBANIM_0_CIRCLE_1_SQUARE_TOSS_BACK, 0, 4
 	battle_anim NO_MOVE, SUBANIM_0_BALL_POOF, 0, 8
 	battle_anim NO_MOVE, SE_TRANSFORM_MON
 	db -1 ; end
@@ -1111,8 +1113,8 @@ SharpenAnim:
 
 ConversionAnim:
 	battle_anim CONVERSION, SE_DARK_SCREEN_FLASH
-	battle_anim NO_MOVE, SUBANIM_0_CIRCLES_1_SQUARES_CENTERING_ENEMY, 1, 6
-	battle_anim NO_MOVE, SUBANIM_0_CIRCLE_1_SQUARE_TOSS_BACK, 1, 6
+	battle_anim NO_MOVE, SUBANIM_0_CIRCLES_1_SQUARES_CENTERING_ENEMY, 0, 6
+	battle_anim NO_MOVE, SUBANIM_0_CIRCLE_1_SQUARE_TOSS_BACK, 0, 6
 	battle_anim NO_MOVE, SE_DARK_SCREEN_FLASH
 	db -1 ; end
 
