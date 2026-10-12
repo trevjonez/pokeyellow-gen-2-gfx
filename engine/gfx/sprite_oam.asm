@@ -4,6 +4,13 @@ PrepareOAMData::
 ; Yellow code has been changed to use registers more efficiently
 ; as well as tweaking the code to show cgb palettes
 
+	; Palettes YellowColorVBlank left for after this vblank's tile copies.
+	ldh a, [hOnCGB]
+	and a
+	jr z, .noColorUpload
+	farcall YellowColorUpload
+.noColorUpload
+
 	ld a, [wUpdateSpritesEnabled]
 	dec a
 	jr z, .updateEnabled

@@ -77,17 +77,24 @@ ApplyOverworldColor::
 
 ; Called at the start of VBlank, after rWBK has been switched to bank 1.
 ; Uploads palettes the line-$6e interrupt prepared, then arms that interrupt
-; for the next frame. Uploading after the vblank copies, as before, landed on
-; line $96 during the battle-start flash, so on hardware a line of slack was
-; enough to miss vblank every frame and the flash never showed. Copies only
-; wait on this when a palette changed (fades, flashes).
+; for the next frame. Uploading after the vblank copies landed on line $96
+; during the battle-start flash, so on hardware a line of slack was enough to
+; miss vblank every frame and the flash never showed. When tile graphics are
+; queued too, upload after them instead (PrepareOAMData), so the ~2.3 lines
+; can't push the copy past vblank. A late upload that runs out of vblank
+; retries next frame. (The window third can't count here: the flash itself
+; runs with auto BG transfer on.)
 ; Arms the line-$6e interrupt that builds the window attribute buffer.
 ; Building it here pushed AutoBgMapTransfer's attribute DMA past vblank,
 ; and the window colors flickered whenever a text box was up.
 ; Scanline effects (intro, surfing) own STAT while hLCDCPointer is set,
 ; and while the hblank interrupt is still enabled.
 YellowColorVBlank::
-	call YellowColorUpload
+	ldh a, [hVBlankCopySize]
+	ld b, a
+	ldh a, [hVBlankCopyDoubleSize]
+	or b
+	call z, YellowColorUpload
 	ldh a, [hLCDCPointer]
 	and a
 	ret nz
@@ -136,7 +143,8 @@ YellowLcdPrepare::
 	ldh [rWBK], a
 	ret
 
-; Called from YellowColorVBlank, at the start of vblank.
+; Called from YellowColorVBlank at the start of vblank, and again from
+; PrepareOAMData after the copies; only modified palettes are sent.
 YellowColorUpload::
 	ld a, 2
 	ldh [rWBK], a

@@ -80,6 +80,14 @@ RefreshWindow::
 	jp z, .palettesDone
 	ld [hl], 0
 
+	; A third takes about 4 lines. Started any later, it would run past vblank
+	; (an early palette upload, YellowColorVBlank, can take the time). Skip it:
+	; with the flag cleared above, line $6e prepares this same third again
+	; from the current tiles, and it lands next frame.
+	ldh a, [rLY]
+	cp LY_VBLANK + 4
+	jp nc, .palettesDone
+
 	ld hl, sp + 0
 	ld a, h
 	ldh [hSPTemp], a
