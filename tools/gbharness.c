@@ -17,6 +17,8 @@
  *   link                 copy this machine into a second one joined by a link cable
  *                        (tools/binjgb-link.patch); frames then runs both in lockstep
  *   use N                send later commands to machine N (0 or 1)
+ *   bgmap N              print "bgmap N", the 32x32 BG map at $9800 (N=0) or $9C00 (N=1)
+ *                        as hex tile IDs, then its CGB attributes, read straight from VRAM
  */
 #include <stdint.h>
 #include <stdio.h>
@@ -153,6 +155,15 @@ int main(int argc, char** argv) {
       emulator_write_state(e, &snapshots[cur]);
     } else if (strncmp(line, "load", 4) == 0) {
       emulator_read_state(e, &snapshots[cur]);
+    } else if (sscanf(line, "bgmap %i", &a) == 1) {
+      TileMap tiles, attrs;
+      emulator_get_tile_map(e, a ? TILE_MAP_9C00_9FFF : TILE_MAP_9800_9BFF, tiles);
+      emulator_get_tile_map_attr(e, a ? TILE_MAP_9C00_9FFF : TILE_MAP_9800_9BFF, attrs);
+      printf("bgmap %d ", a);
+      for (int i = 0; i < TILE_MAP_SIZE; i++) printf("%02x", tiles[i]);
+      printf(" ");
+      for (int i = 0; i < TILE_MAP_SIZE; i++) printf("%02x", attrs[i]);
+      printf("\n");
     } else if (sscanf(line, "echo %999[^\n]", arg) == 1) {
       printf("%s\n", arg);
     }
