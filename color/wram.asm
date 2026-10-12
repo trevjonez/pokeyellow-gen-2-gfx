@@ -68,5 +68,12 @@ DEF W2_AttackPalPointer            EQU $d790 ; 2 bytes
 ; toward white or black (ToneMapBGP) instead of shuffling colors.
 DEF W2_BGPToneMap                  EQU $d792
 
+; Attributes for a pending VBlankCopyBgMap request, built at line $6e so vblank
+; only has to DMA them. See PrepareCopyBgMapPalettes.
+DEF W2_CopyBgMapPalettesBuffer     EQU $d600 ; 32x6 bytes (DMA-able), $d600-$d6c0
+; Low byte of the hVBlankCopyBGSource the buffer was built for; 0 = none.
+DEF W2_CopyBgMapPalettesFor        EQU $d793
+DEF W2_CopyBgMapRowsLeft           EQU $d794
+
 ; In bank 1, the stack starts at $dfff. So, that's also the stack here when bank 2 is
 ; loaded. Don't use anything too close to there.

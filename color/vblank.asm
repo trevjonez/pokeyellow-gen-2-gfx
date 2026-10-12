@@ -5,9 +5,48 @@ GbcPrepareVBlank::
 	ld a, 2
 	ldh [rWBK], a
 	call RefreshWindowPalettesPreVBlank
+	call PrepareCopyBgMapPalettes
 	call RefreshPalettesPreVBlank
 	xor a
 	ldh [rWBK], a
+	ret
+
+; Build the attributes for a pending VBlankCopyBgMap request (DisplayTextIDInit
+; copying wTileMap to the window map) so YellowVBlankCopyBgMap can DMA them.
+; rWBK is 2. Only bank-0 sources (wTileMap) are readable from here.
+PrepareCopyBgMapPalettes:
+	ldh a, [hVBlankCopyBGSource]
+	and a
+	ret z
+	ld e, a
+	ld a, [W2_CopyBgMapPalettesFor]
+	cp e
+	ret z
+	ldh a, [hVBlankCopyBGSource + 1]
+	cp HIGH(STARTOF(WRAMX))
+	ret nc
+	ld d, a
+	ldh a, [hVBlankCopyBGNumRows]
+	ld [W2_CopyBgMapRowsLeft], a
+	ld hl, W2_CopyBgMapPalettesBuffer
+	ld b, HIGH(W2_TilesetPaletteMap)
+.row
+REPT SCREEN_WIDTH
+	ld a, [de]
+	inc de
+	ld c, a
+	ld a, [bc]
+	ld [hli], a
+ENDR
+	ld a, l
+	add TILEMAP_WIDTH - SCREEN_WIDTH ; the buffer stays within one page
+	ld l, a
+	ld a, [W2_CopyBgMapRowsLeft]
+	dec a
+	ld [W2_CopyBgMapRowsLeft], a
+	jr nz, .row
+	ldh a, [hVBlankCopyBGSource]
+	ld [W2_CopyBgMapPalettesFor], a
 	ret
 
 ; Refresh palettes based on BGP and OBP registers

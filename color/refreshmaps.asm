@@ -221,6 +221,10 @@ YellowVBlankCopyBgMap::
 	jr z, .tilesOnly
 	ld a, 2
 	ldh [rWBK], a
+	ld a, [W2_CopyBgMapPalettesFor]
+	ld c, a
+	xor a
+	ld [W2_CopyBgMapPalettesFor], a ; used now or never
 	ld a, [W2_UsePerTileColor]
 	ld b, a
 	xor a
@@ -228,6 +232,9 @@ YellowVBlankCopyBgMap::
 	ld a, b
 	and a
 	jr z, .tilesOnly
+	ldh a, [hVBlankCopyBGSource]
+	cp c
+	jr z, .preparedPalettes
 	ld hl, sp + 0
 	ld a, h
 	ldh [hSPTemp], a
@@ -247,6 +254,31 @@ YellowVBlankCopyBgMap::
 	xor a
 	ldh [hVBlankCopyBGSource], a
 	jp WindowTransferBgRowsAndColors
+
+; The attributes were built at line $6e: DMA them, then copy the tiles. Looking
+; them up here, tile by tile, ran the menu-opening vblank past line 153.
+; Whole 32-tile rows go out, which only the window map can take; the one
+; per-tile caller, DisplayTextIDInit, copies to vBGMap1.
+.preparedPalettes
+	ld a, 2
+	ldh [rWBK], a
+	ld a, 1
+	ldh [rVBK], a
+	ld a, HIGH(W2_CopyBgMapPalettesBuffer)
+	ldh [rHDMA1], a
+	ld a, LOW(W2_CopyBgMapPalettesBuffer)
+	ldh [rHDMA2], a
+	ldh a, [hVBlankCopyBGDest + 1]
+	ldh [rHDMA3], a
+	ldh a, [hVBlankCopyBGDest]
+	ldh [rHDMA4], a
+	ldh a, [hVBlankCopyBGNumRows]
+	add a
+	dec a ; 2 blocks of 16 bytes per row, minus 1
+	ldh [rHDMA5], a ; general-purpose DMA, done before the next instruction
+	xor a
+	ldh [rVBK], a
+	ldh [rWBK], a
 .tilesOnly
 	ld [hSPTemp], sp
 	ldh a, [hVBlankCopyBGSource]
