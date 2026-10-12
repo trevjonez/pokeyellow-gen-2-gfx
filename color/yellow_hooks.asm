@@ -26,6 +26,37 @@ ClearOverworldColor::
 	ldh [rWBK], a
 	ret
 
+; Trade screens draw with Yellow's palette commands. A link trade suspends per-tile
+; color before its screens and gets it back when LoadMapData reloads the room; an
+; in-game trade suspends it in TradeAnimCommon and resumes in InGameTrade_RestoreScreen.
+; The first trade screens come before any palette command, so rerun the overworld
+; command the vanilla way: Yellow's palettes and a whole-screen attribute map,
+; instead of the map's palettes and attributes left behind.
+SuspendOverworldColor::
+	call PerTileColorOwnsBgOnCGB
+	ret z
+	call ClearOverworldColor
+	ld b, SET_PAL_OVERWORLD
+	jp RunPaletteCommand
+
+; Hands the screen back to per-tile color; the caller's map redraw restamps the
+; attributes and SET_PAL_OVERWORLD reloads the palettes.
+ResumeOverworldColor::
+	ldh a, [hOnCGB]
+	and a
+	ret z
+	ldh a, [rWBK]
+	ld b, a
+	ld a, 2
+	ldh [rWBK], a
+	ld a, 1
+	ld [W2_UsePerTileColor], a
+	ld [W2_ForceBGPUpdate], a
+	ld [W2_ForceOBPUpdate], a
+	ld a, b
+	ldh [rWBK], a
+	ret
+
 ; LCD is off. Loads the tileset palettes, writes them, and stamps the attribute map.
 ApplyOverworldColor::
 	ld a, 2
@@ -247,6 +278,35 @@ ClearPlainWindowPal::
 	ld a, b
 	ldh [rWBK], a
 	jp LoadTilesetPalette
+
+; The trade party lists fill the window, which per-tile color draws as a text box in
+; palette 7 (white, white, white, black). Their borders use the two middle shades, so
+; give palette 7 the link rooms' Yellow palette (PAL_GRAYMON) while the lists are up.
+; Leaving them runs SET_PAL_OVERWORLD, which reloads the room's palettes.
+SetTradeListPalette::
+	call PerTileColorOwnsBgOnCGB
+	ret z
+	ldh a, [rWBK]
+	ld b, a
+	ld a, 2
+	ldh [rWBK], a
+	ld hl, TradeListPalette
+	ld de, W2_BgPaletteData + 7 * 8 ; palette 7, 4 colors * 2 bytes
+	ld c, 8
+.copy
+	ld a, [hli]
+	ld [de], a
+	inc de
+	dec c
+	jr nz, .copy
+	ld a, 1
+	ld [W2_ForceBGPUpdate], a
+	ld a, b
+	ldh [rWBK], a
+	ret
+
+TradeListPalette:
+	RGB 31,31,31, 20,23,10, 11,11,05, 03,03,03 ; PAL_GRAYMON
 
 ; SET_PAL_OVERWORLD while per-tile color owns the screen. Yellow's version
 ; would replace every palette and the attribute map with the town's 4-color

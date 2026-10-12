@@ -150,6 +150,7 @@ InGameTrade_DoTrade:
 
 InGameTrade_RestoreScreen:
 	call GBPalWhiteOutWithDelay3
+	farcall ResumeOverworldColor
 	call RestoreScreenTilesAndReloadTilePatterns
 	call ReloadTilesetTilePatterns
 	call LoadScreenTilesFromBuffer2

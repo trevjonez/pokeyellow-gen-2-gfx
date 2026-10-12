@@ -18,6 +18,9 @@ ExternalClockTradeAnim:
 	ld de, ExternalClockTradeFuncSequence
 
 TradeAnimCommon:
+	push de
+	farcall SuspendOverworldColor ; in-game trades resume it in InGameTrade_RestoreScreen
+	pop de
 	ld a, [wOptions]
 	push af
 	and %110000 ; preserve speaker options

@@ -641,6 +641,7 @@ TradeCenter_DisplayStats:
 	jp TradeCenter_DrawCancelBox
 
 TradeCenter_DrawPartyLists:
+	farcall SetTradeListPalette
 	hlcoord 0, 0
 	lb bc, 6, 18
 	call CableClub_TextBoxBorder
@@ -838,6 +839,7 @@ TradeCenter_Trade:
 	ld a, MUSIC_SAFARI_ZONE
 	ld [wNewSoundID], a
 	call PlaySound
+	farcall SuspendOverworldColor ; until ReturnToCableClubRoom reloads the room
 	ld c, 100
 	call DelayFrames
 	call ClearScreen
