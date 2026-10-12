@@ -22,7 +22,7 @@ import re
 import sys
 from collections import Counter, deque
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TILESET_SIZE = 0x60
@@ -99,11 +99,20 @@ def load():
                  re.findall(r'connection\s+(\w+),\s*(\w+),\s*(\w+),\s*(-?\d+)', text)]
         w, h = d['map_size'][const]
         obj = os.path.join(ROOT, 'data/maps/objects', label + '.asm')
+        otext = open(obj).read() if os.path.exists(obj) else ''
         warps = [(int(x), int(y), dest, int(n)) for x, y, dest, n in
-                 re.findall(r'warp_event\s+(\d+),\s*(\d+),\s*(\w+),\s*(\d+)',
-                            open(obj).read())] if os.path.exists(obj) else []
+                 re.findall(r'warp_event\s+(\d+),\s*(\d+),\s*(\w+),\s*(\d+)', otext)]
+        # object_event x, y, sprite, movement, facing, text[, item | trainer class, number]
+        objects = []
+        for line in otext.splitlines():
+            m2 = re.match(r'object_event\s+(.*)', strip(line))
+            if m2:
+                a = [v.strip() for v in m2.group(1).split(',')]
+                objects.append(dict(x=int(a[0]), y=int(a[1]), sprite=a[2], move=a[3], facing=a[4],
+                                    item=a[6] if len(a) == 7 else None,
+                                    trainer=' '.join(a[6:8]) if len(a) >= 8 else None))
         d['maps'][const] = dict(label=label, tileset=tileset, w=w, h=h,
-                                blk=blk[label], conns=conns, warps=warps)
+                                blk=blk[label], conns=conns, warps=warps, objects=objects)
 
     # Tilesets: graphics, blocks, palette map, palette set, in tileset id order.
     tileset_consts = const_list('constants/tileset_constants.asm')
@@ -150,6 +159,30 @@ def load():
         roof_cols[name] = rgb_triplets(body)[:2]
     d['roofs'] = [roof_cols[n] for n in roof_order]
 
+    d['hidden_items'] = {}
+    for mp, x, y in re.findall(r'hidden_item\s+(\w+),\s*(\d+),\s*(\d+)',
+                               src('data/events/hidden_item_coords.asm')):
+        d['hidden_items'].setdefault(mp, []).append((int(x), int(y)))
+
+    # Overworld sprites: graphics, standing frames, and their CGB palette (color/sprites.asm).
+    sprite_ids = {n: i for i, n in enumerate(const_list('constants/sprite_constants.asm')) if n}
+    sheets = re.findall(r'overworld_sprite\s+(\w+),\s*(\d+)', src('data/sprites/sprites.asm'))
+    sgfx = label_blocks(src('gfx/sprites.asm'), r'INCBIN\s*"([^"]+)"')
+    spr_pal = {n: int(v) for n, v in re.findall(r'DEF (SPR_PAL_\w+)\s+EQU\s+(\d+)', src('color/sprites.asm'))}
+    assign = re.findall(r'db\s+(SPR_PAL_\w+)', src('color/sprites.asm').split('SpritePaletteAssignments:')[1])
+    pal_text = src('color/data/spritepalettes.asm')
+    d['sprite_palettes'] = {}
+    for name in ('SpritePalettes', 'SpritePalettesNite', 'SpritePalettesPokecenter'):
+        body = pal_text.split(name + ':', 1)[1]
+        cols = rgb_triplets(body)[:32]
+        d['sprite_palettes'][name] = [cols[i:i + 4] for i in range(0, 32, 4)]
+    d['sprites'] = {}
+    for i, (label, ntiles) in enumerate(sheets):
+        path = os.path.join(ROOT, sgfx[label].replace('.2bpp', '.png'))
+        d['sprites'][i + 1] = dict(png=path, tiles=int(ntiles),
+                                   pal=spr_pal[assign[i]] if i < len(assign) else 0)
+    d['sprite_ids'] = sprite_ids
+
     d['tilesets'] = {}
     for i, name in enumerate(names):
         const = tileset_consts[i]
@@ -168,12 +201,18 @@ def load():
     return d
 
 
+LAB_FLOOR_TILES = (0x11, 0x0b, 0x0c, 0x1b, 0x1c, 0x20, 0x21, 0x30, 0x31, 0x36, 0x37,
+                   0x48, 0x49, 0x4a, 0x4b, 0x55, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f)  # LabFloorTiles
+
 # Per-map tile palette patches that color/loadpalettes.asm applies at runtime.
 RUNTIME_PALMAP = {
     'CELADON_MART_ROOF': {t: 3 for t in range(0x4b, 0x50)},             # PAL_BG_WATER
     'CELADON_MART_1F': {t: 4 for t in (0x07, 0x08, 0x17, 0x18)},        # PAL_BG_YELLOW
     'CERULEAN_GYM': {t: 5 for t in (0x01, 0x11, 0x09, 0x0a, 0x19, 0x1a)},  # PAL_BG_BROWN
     'LORELEIS_ROOM': {t: 5 for t in (0x01, 0x11, 0x09, 0x0a, 0x19, 0x1a)},
+    'OAKS_LAB': {t: 4 for t in LAB_FLOOR_TILES},                        # DojoPalSet LAB_FLOOR
+    'LANCES_ROOM': {t: 4 for t in LAB_FLOOR_TILES},
+    'FIGHTING_DOJO': {0x11: 2},                                         # DojoPalSet DOJO_FLOOR
 }
 
 
@@ -230,6 +269,73 @@ def render_map(d, const, usage=None):
                     for x in range(8):
                         px[ox + x, oy + y] = rows[y][x] if rows else (255, 0, 255)
     return img
+
+
+def sprite_palettes(d, const):
+    """OBJ palettes the engine loads for this map (LoadOverworldSpritePalettes)."""
+    ts = d['maps'][const]['tileset']
+    name = ('SpritePalettesNite' if ts == 'CAVERN' else
+            'SpritePalettesPokecenter' if ts == 'POKECENTER' or const == 'INDIGO_PLATEAU_LOBBY' else
+            'SpritePalettes')
+    return [[to888(c) for c in p] for p in d['sprite_palettes'][name]]
+
+
+_sheet_cache = {}
+
+
+def sprite_frame(d, sid, facing):
+    """16x16 shade grid of a sprite's standing frame; None if the sprite has no graphics."""
+    spr = d['sprites'].get(sid)
+    if not spr or not os.path.exists(spr['png']):
+        return None
+    if spr['png'] not in _sheet_cache:
+        _sheet_cache[spr['png']] = Image.open(spr['png']).convert('L')
+    sheet = _sheet_cache[spr['png']]
+    # Standing frames are down, up, left; right is the left frame mirrored.
+    frame = {'UP': 1, 'LEFT': 2, 'RIGHT': 2}.get(facing, 0) if spr['tiles'] >= 12 else 0
+    box = sheet.crop((0, frame * 16, 16, frame * 16 + 16))
+    if facing == 'RIGHT' and spr['tiles'] >= 12:
+        box = box.transpose(Image.FLIP_LEFT_RIGHT)
+    shade = {255: 0, 170: 1, 85: 2, 0: 3}
+    return [[shade.get(box.getpixel((x, y)), 3) for x in range(16)] for y in range(16)]
+
+
+def object_layers(d, const):
+    """Transparent overlays of a map's NPCs, item balls and hidden items, plus hover info."""
+    m = d['maps'][const]
+    size = (m['w'] * 32, m['h'] * 32)
+    layers = {k: Image.new('RGBA', size, (0, 0, 0, 0)) for k in ('npcs', 'items', 'hidden')}
+    pals = sprite_palettes(d, const)
+    info = []
+    for n, o in enumerate(m['objects'], 1):
+        kind = 'items' if o['item'] else 'npcs'
+        sid = d['sprite_ids'].get(o['sprite'])
+        grid = sprite_frame(d, sid, o['facing'])
+        p = d['sprites'].get(sid, {}).get('pal', 0)
+        if p == 8:   # SPR_PAL_RANDOM: the engine picks by sprite slot; Bill is brown
+            p = 3 if const == 'BILLS_HOUSE' else n & 3
+        pal = pals[p if p < 8 else 0]
+        ox, oy = o['x'] * 16, o['y'] * 16 - 4      # sprites sit 4px higher than their square
+        if grid:
+            px = layers[kind].load()
+            for y in range(16):
+                for x in range(16):
+                    v = grid[y][x]
+                    if v and 0 <= ox + x < size[0] and 0 <= oy + y < size[1]:
+                        px[ox + x, oy + y] = pal[v] + (255,)
+        label = o['sprite'].replace('SPRITE_', '').lower()
+        if o['item']:
+            label += ': ' + o['item']
+        elif o['trainer']:
+            label += ': trainer ' + o['trainer']
+        info.append(dict(x=o['x'] * 16, y=o['y'] * 16, layer=kind, text=label))
+    dr = ImageDraw.Draw(layers['hidden'])
+    for x, y in d['hidden_items'].get(const, []):
+        cx, cy = x * 16 + 8, y * 16 + 8
+        dr.ellipse((cx - 6, cy - 6, cx + 6, cy + 6), outline=(255, 0, 200, 255), width=2)
+        dr.ellipse((cx - 1, cy - 1, cx + 1, cy + 1), fill=(255, 0, 200, 255))
+        info.append(dict(x=x * 16, y=y * 16, layer='hidden', text='hidden item'))
+    return layers, info
 
 
 def place_world(d, start='PALLET_TOWN'):
@@ -301,9 +407,14 @@ def main():
     d = load()
     usage = Counter()
     renders = {}
+    layers, objinfo = {}, {}
     for const in d['maps']:
+        label = d['maps'][const]['label']
         renders[const] = render_map(d, const, usage)
-        renders[const].save(os.path.join(out, 'maps', d['maps'][const]['label'] + '.png'))
+        renders[const].save(os.path.join(out, 'maps', label + '.png'))
+        layers[const], objinfo[const] = object_layers(d, const)
+        for k, im in layers[const].items():
+            im.save(os.path.join(out, 'maps', f'{label}.{k}.png'))
 
     pos = place_world(d)
     minx = min(x for x, y in pos.values())
@@ -311,9 +422,15 @@ def main():
     maxx = max(x + d['maps'][k]['w'] for k, (x, y) in pos.items())
     maxy = max(y + d['maps'][k]['h'] for k, (x, y) in pos.items())
     world = Image.new('RGB', ((maxx - minx) * 32, (maxy - miny) * 32), (24, 24, 32))
+    wlayers = {k: Image.new('RGBA', world.size, (0, 0, 0, 0)) for k in ('npcs', 'items', 'hidden')}
     for const, (x, y) in pos.items():
-        world.paste(renders[const], ((x - minx) * 32, (y - miny) * 32))
+        at = ((x - minx) * 32, (y - miny) * 32)
+        world.paste(renders[const], at)
+        for k, im in layers[const].items():
+            wlayers[k].alpha_composite(im, at)
     world.save(os.path.join(out, 'world.png'))
+    for k, im in wlayers.items():
+        im.save(os.path.join(out, f'world.{k}.png'))
 
     warps = resolve_warps(d)
     label = {k: m['label'] for k, m in d['maps'].items()}
@@ -325,7 +442,8 @@ def main():
             world=[(wpos[0] - minx) * 32, (wpos[1] - miny) * 32] if wpos else None,
             warps=[dict(x=x * 16, y=y * 16,
                         to=[dict(map=label[t], x=tx * 16, y=ty * 16) for t, tx, ty in targets])
-                   for x, y, targets in warps[const]])
+                   for x, y, targets in warps[const]],
+            objects=objinfo[const])
 
     pal_names = {i: n for i, n in enumerate(const_list('color/data/map_palette_constants.asm')) if n}
     tilesets = []
@@ -363,6 +481,8 @@ nav button[aria-pressed=true] { border-color:var(--acc); color:var(--acc) }
 #view { position:relative; height:calc(100vh - 45px); overflow:hidden; cursor:grab; background:#18181f; touch-action:none; user-select:none }
 #stage { position:absolute; left:0; top:0; transform-origin:0 0 }
 #stage img { display:block; image-rendering:pixelated; -webkit-user-drag:none; pointer-events:none }
+#stage img.layer { position:absolute; left:0; top:0 }
+body.no-npcs #lnpcs, body.no-items #litems, body.no-hidden #lhidden { display:none }
 #marks { position:absolute; inset:0; pointer-events:none }
 .warp { position:absolute; width:16px; height:16px; outline:1px solid rgba(255,214,0,.9); background:rgba(255,214,0,.18) }
 .warp.dead { outline-color:rgba(255,80,80,.9); background:rgba(255,80,80,.18) }
@@ -383,17 +503,21 @@ body.nowarps .warp { display:none }
   <button id="bw">World</button>
   <select id="pick" aria-label="Open a map"></select>
   <button id="bwarps" aria-pressed="true">Warps</button>
+  <button class="lay" data-layer="npcs" aria-pressed="true">NPCs</button>
+  <button class="lay" data-layer="items" aria-pressed="true">Items</button>
+  <button class="lay" data-layer="hidden" aria-pressed="true">Hidden items</button>
   <button id="bt">Tile inventory</button>
   <span id="where"></span>
   <span id="hint">drag to pan, wheel to zoom, click a yellow warp to follow it, Back to return</span>
 </nav>
-<div id="view"><div id="stage"><img id="vimg" alt="" draggable="false"><div id="marks"></div></div><div id="label"></div></div>
+<div id="view"><div id="stage"><img id="vimg" alt="" draggable="false"><img id="lnpcs" class="layer" alt="" draggable="false"><img id="litems" class="layer" alt="" draggable="false"><img id="lhidden" class="layer" alt="" draggable="false"><div id="marks"></div></div><div id="label"></div></div>
 <div id="tiles"></div>
 <script>
 const data = /*DATA*/null;
 const V = document.getElementById('view'), S = document.getElementById('stage'), I = document.getElementById('vimg'),
       M = document.getElementById('marks'), L = document.getElementById('label'), T = document.getElementById('tiles');
-let s = 3, x = 0, y = 0, drag = null, cur = null, warps = [], rects = [];
+let s = 3, x = 0, y = 0, drag = null, cur = null, warps = [], rects = [], objs = [];
+const LAYERS = ['npcs', 'items', 'hidden'];
 const apply = () => S.style.transform = `translate(${x}px,${y}px) scale(${s})`;
 const worldMaps = Object.entries(data.maps).filter(([, m]) => m.world);
 
@@ -414,10 +538,14 @@ function show(hash) {
     const name = route.slice(4), m = data.maps[name];
     cur = name; I.src = `maps/${name}.png`; w = m.w; h = m.h; rects = [[name, 0, 0, m.w, m.h]];
     warps = m.warps.map(wp => ({ ...wp, from: name }));
+    objs = m.objects;
+    for (const l of LAYERS) document.getElementById('l' + l).src = `maps/${name}.${l}.png`;
   } else {
     cur = null; I.src = 'world.png'; w = data.world.w; h = data.world.h;
     rects = worldMaps.map(([n, m]) => [n, m.world[0], m.world[1], m.w, m.h]);
     warps = worldMaps.flatMap(([n, m]) => m.warps.map(wp => ({ ...wp, from: n, x: wp.x + m.world[0], y: wp.y + m.world[1] })));
+    objs = worldMaps.flatMap(([n, m]) => m.objects.map(o => ({ ...o, x: o.x + m.world[0], y: o.y + m.world[1] })));
+    for (const l of LAYERS) document.getElementById('l' + l).src = `world.${l}.png`;
   }
   S.style.width = w + 'px'; S.style.height = h + 'px';
   document.getElementById('where').textContent = cur || 'Overworld';
@@ -456,6 +584,7 @@ V.addEventListener('pointermove', e => {
   if (!r) { L.style.display = 'none'; return; }
   let t = `${r[0]}  (${Math.floor((wx - r[1]) / 16)}, ${Math.floor((wy - r[2]) / 16)})`;
   if (w) t += w.to.length ? `\n→ ${w.to.map(t => t.map).join('\n   or ')}` : '\n→ set by a script';
+  for (const o of objs) if (wx >= o.x && wx < o.x + 16 && wy >= o.y && wy < o.y + 16 && !document.body.classList.contains('no-' + o.layer)) t += `\n${o.text}`;
   L.textContent = t; L.style.display = 'block'; L.style.left = (mx + 14) + 'px'; L.style.top = (my + 14) + 'px';
 });
 
@@ -469,6 +598,14 @@ const setWarps = on => { document.body.classList.toggle('nowarps', !on); BW.setA
   try { localStorage.setItem('warps', on ? '1' : '0'); } catch (e) {} };
 BW.onclick = () => setWarps(document.body.classList.contains('nowarps'));
 try { setWarps(localStorage.getItem('warps') !== '0'); } catch (e) {}
+const setLayer = (l, on) => { document.body.classList.toggle('no-' + l, !on);
+  document.querySelector(`.lay[data-layer="${l}"]`).setAttribute('aria-pressed', on);
+  try { localStorage.setItem('layer-' + l, on ? '1' : '0'); } catch (e) {} };
+for (const b of document.querySelectorAll('.lay')) {
+  const l = b.dataset.layer;
+  b.onclick = () => setLayer(l, document.body.classList.contains('no-' + l));
+  try { setLayer(l, localStorage.getItem('layer-' + l) !== '0'); } catch (e) { setLayer(l, true); }
+}
 window.addEventListener('hashchange', () => show(location.hash));
 
 for (const ts of data.tilesets) {
