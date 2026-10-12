@@ -149,6 +149,31 @@ LoadTilesetPalette:
 	ld [hli], a
 	ld [hl], a
 .notPoolWalkway
+	; Floors of the rooms on the Dojo tileset (DojoPalSet slots 2 and 4)
+	ld a, b
+	cp OAKS_LAB
+	jr z, .labFloor
+	cp LANCES_ROOM
+	jr nz, .notLabFloor
+.labFloor
+	; The floor, plus the objects drawn over floor stripes (trash can, PC,
+	; stairs, doorway), so they don't sit in gray boxes.
+	ld h, HIGH(W2_TilesetPaletteMap)
+	ld de, LabFloorTiles
+.labFloorLoop
+	ld a, [de]
+	inc de
+	cp -1
+	jr z, .doneFloor
+	ld l, a
+	ld [hl], PAL_BG_YELLOW
+	jr .labFloorLoop
+.notLabFloor
+	cp FIGHTING_DOJO
+	jr nz, .doneFloor
+	ld a, PAL_BG_GREEN
+	ld [W2_TilesetPaletteMap + $11], a
+.doneFloor
 
 	; Retrieve former wram bank
 	pop af
@@ -172,6 +197,11 @@ LoadTilesetPalette:
 	pop de
 	pop bc
 	ret
+
+LabFloorTiles:
+	db $11, $0b, $0c, $1b, $1c, $20, $21, $30, $31, $36, $37
+	db $48, $49, $4a, $4b, $55, $5b, $5c, $5d, $5e, $5f
+	db -1
 
 ; Towns have different roof colors while using the same tileset
 LoadTownPalette:

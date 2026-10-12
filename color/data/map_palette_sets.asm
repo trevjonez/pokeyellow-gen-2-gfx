@@ -70,6 +70,18 @@ GymPalSet:
 	db INDOOR_LIGHT_BLUE
 	db CRYS_TEXTBOX
 
+; The Dojo tiles never use slots 2 and 4; they hold floor colors that
+; loadpalettes.asm picks per map, since tile $11 shares the gym tilepal table.
+DojoPalSet:
+	db INDOOR_GRAY
+	db INDOOR_RED
+	db DOJO_FLOOR
+	db INDOOR_BLUE
+	db LAB_FLOOR
+	db INDOOR_BROWN
+	db INDOOR_LIGHT_BLUE
+	db CRYS_TEXTBOX
+
 ; Slots 3 and 6 are the dock's own water and truck palettes.
 ShipPortPalSet:
 	db INDOOR_GRAY
@@ -94,7 +106,6 @@ HousePalSet:
 	db INDOOR_LIGHT_BLUE
 	db CRYS_TEXTBOX
 
-DojoPalSet:
 ForestGatePalSet:
 UndergroundPalSet:
 ShipPalSet:

@@ -21,7 +21,7 @@
 	const BEACH_STOOL       ; 13
 	const DOCK_WATER        ; 14
 	const DOCK_TRUCK        ; 15
-	const MAP_PALETTE_16    ; 16
+	const LAB_FLOOR         ; 16
 	const CAVE_GRAY         ; 17
 	const CAVE_RED          ; 18
 	const CAVE_GREEN        ; 19
@@ -38,7 +38,7 @@
 
 	; These are unused
 	const FOREST_CLIFF      ; 24
-	const MAP_PALETTE_25    ; 25
+	const DOJO_FLOOR        ; 25
 	const MAP_PALETTE_26    ; 26
 	const MAP_PALETTE_27    ; 27
 	const MAP_PALETTE_28    ; 28

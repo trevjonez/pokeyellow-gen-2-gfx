@@ -142,10 +142,11 @@ MapPalettes:
 	RGB 30,10,6
 	RGB 7,7,7
 
-; 0x16: MAP_PALETTE_16
-	RGB 27,31,27
-	RGB 15,10,31
-	RGB 7,5,15
+; 0x16: LAB_FLOOR
+; Oak's Lab and Lance's room floor (tile $11 only uses colors 1 and 2).
+	RGB 30,28,26
+	RGB 29,27,19
+	RGB 24,21,13
 	RGB 7,7,7
 
 ; 0x17: CAVE_GRAY
@@ -233,11 +234,12 @@ MapPalettes:
 	RGB 20,15,3
 	RGB 10,7,3
 
-; 0x25: MAP_PALETTE_25
-	RGB 0,0,0
-	RGB 0,0,0
-	RGB 0,0,0
-	RGB 0,0,0
+; 0x25: DOJO_FLOOR
+; Fighting Dojo wooden floor.
+	RGB 30,28,26
+	RGB 25,21,14
+	RGB 19,15,9
+	RGB 7,7,7
 
 ; 0x26: MAP_PALETTE_26
 	RGB 0,0,0
