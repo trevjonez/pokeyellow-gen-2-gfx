@@ -16,6 +16,7 @@ _RunPaletteCommand:
 	ld d, a
 	push af
 	farcall MenuPaletteCommand ; d = command
+	call GetPredefRegisters ; the farcall clobbered them; SetPal_PokemonWholeScreen reads c
 	pop af
 	cp SET_PAL_PARTY_MENU_HP_BARS
 	jp z, UpdatePartyMenuBlkPacket
