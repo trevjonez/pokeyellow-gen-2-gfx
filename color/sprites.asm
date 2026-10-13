@@ -101,15 +101,26 @@ ColorOverworldSprite::
 
 .lookupPicture
 	ldh a, [hSpriteOffset2]
-	cp PIKACHU_SPRITE_INDEX * $10
-	jr nz, .readPicture
-	; The follower's picture ID is $49, which is also SPRITE_BOULDER.
-	ld a, SPR_PAL_YELLOW
-	jr .gotPalette
-.readPicture
 	ld e, a
 	ld d, wSpriteStateData1 >> 8
 	ld a, [de] ; Load A with picture ID
+	; The follower Pikachu's picture ID is $49, which is also SPRITE_BOULDER.
+	; It lives in the follower slot, or in the player's slot while the two swap
+	; for Pikachu's jump onto a Pokemon Center counter. A $49 anywhere else is
+	; a boulder. Going by slot alone turned the jumping Pikachu boulder-brown
+	; and the player yellow.
+	cp SPRITE_BOULDER
+	jr nz, .readPicture
+	ld a, e
+	and a
+	jr z, .pikachu
+	cp PIKACHU_SPRITE_INDEX * $10
+	ld a, SPRITE_BOULDER
+	jr nz, .readPicture
+.pikachu
+	ld a, SPR_PAL_YELLOW
+	jr .gotPalette
+.readPicture
 	dec a
 
 	ld de, SpritePaletteAssignments
