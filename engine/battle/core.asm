@@ -46,6 +46,16 @@ SlidePlayerAndEnemySilhouettesOnScreen:
 .noCarry
 	dec b
 	jr nz, .copyRowLoop
+	; Turning the LCD off shows white on the GBC. Come back on all white too,
+	; instead of in the battle transition's black palette for the few frames
+	; before the slide sets the real one: that blinked dark between whites.
+	xor a
+	ldh [rBGP], a
+	ldh [rOBP0], a
+	ldh [rOBP1], a
+	call UpdateCGBPal_BGP
+	call UpdateCGBPal_OBP0
+	call UpdateCGBPal_OBP1
 	call EnableLCD
 	ld a, $90
 	ldh [hWY], a
