@@ -101,6 +101,11 @@ SlidePlayerAndEnemySilhouettesOnScreen:
 	ldh [hStartTileID], a
 	hlcoord 1, 5
 	predef CopyUncompressedPicToTilemap
+	; Let the auto transfer copy all three thirds into the window's map before
+	; raising the window over the finished slide. Raised first, it showed the
+	; stale map for those frames: the enemy pic gone, then only the player's
+	; head (a sprite) over a body not yet copied.
+	call Delay3
 	xor a
 	ldh [hWY], a
 	ldh [rWY], a
