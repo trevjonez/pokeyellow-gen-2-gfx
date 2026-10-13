@@ -77,6 +77,24 @@ It needs Python with Pillow, `git` and `gcc`. The first run clones [binjgb](http
 
 Some moves only work in a certain setup; `Game.SPECIAL` in the script handles those (Dream Eater on a sleeping target, for example). Mirror Move is skipped because it plays the copied move's animation. `battlepreview/` and `tools/.cache/` are ignored by git.
 
+## Debugging on hardware
+
+Two tools turn a problem seen on a real Game Boy into something you can inspect.
+
+**Crash dumps.** If the game runs into $FF bytes it executes `rst $38`. Instead of looping there, the handler (`color/crash.asm`) saves the registers, the stack and HRAM to the battery save, turns the screen red and stops. Reset so the save gets written, then decode it with the `.sym` from the same build:
+
+```
+tools/crashdump.py "Pokemon Yellow.srm" pokeyellow.sym
+```
+
+**EverDrive snapshots.** The EverDrive GB X can save a snapshot of the running game to `GBCSYS/SNAP/<rom name>.sav`. `tools/snap2bess.py` converts it into a [BESS](https://github.com/LIJI32/SameBoy/blob/master/BESS.md) save state that SameBoy and other BESS emulators can load, with the same work RAM, video memory, palettes, registers and save RAM:
+
+```
+tools/snap2bess.py snap.sav snap.state pokeyellow.gbc
+```
+
+Use the exact ROM build that was on the cart when the snapshot was taken. A snapshot taken while the game is stuck can be loaded and traced in an emulator, even on a build without the crash handler.
+
 ---
 
 Original README follows...
