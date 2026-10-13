@@ -4,7 +4,8 @@ sSpriteBuffer0:: ds SPRITEBUFFERSIZE
 sSpriteBuffer1:: ds SPRITEBUFFERSIZE
 sSpriteBuffer2:: ds SPRITEBUFFERSIZE
 
-	ds $100
+; Unused by the game; CrashHandler writes here. tools/crashdump.py reads it.
+sCrashDump:: ds $100
 
 sHallOfFame:: ds HOF_TEAM * HOF_TEAM_CAPACITY
 

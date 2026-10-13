@@ -32,13 +32,19 @@ SECTION "rst28", ROM0[$0028]
 
 	ds $30 - @, 0 ; unused
 
+; The rest of the rst $38 crash hook, which needs more than its own 8 bytes.
 SECTION "rst30", ROM0[$0030]
-	rst $38
+	ld a, BANK(CrashHandler)
+	ld [rROMB], a
+	jp CrashHandler
 
-	ds $38 - @, 0 ; unused
-
+; Running into $FF bytes (a wild jump) lands here. This used to call itself
+; until the stack had overwritten all of RAM; now it records where the game
+; was in SRAM (sCrashDump) and stops. See tools/crashdump.py.
 SECTION "rst38", ROM0[$0038]
-	rst $38
+	di
+	push af
+	jr $0030
 
 	ds $40 - @, 0 ; unused
 
