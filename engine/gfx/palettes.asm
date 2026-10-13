@@ -13,6 +13,10 @@ _RunPaletteCommand:
 	dec d ; d = 1 if per-tile color took the command
 	ret z
 .notOverworld
+	ld d, a
+	push af
+	farcall MenuPaletteCommand ; d = command
+	pop af
 	cp SET_PAL_PARTY_MENU_HP_BARS
 	jp z, UpdatePartyMenuBlkPacket
 	ld l, a

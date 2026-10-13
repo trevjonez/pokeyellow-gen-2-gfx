@@ -61,7 +61,9 @@ ResumeOverworldColor::
 ApplyOverworldColor::
 	ld a, 2
 	ldh [rWBK], a
-	ld a, 1
+	xor a
+	ld [W2_MenuColorSuspended], a
+	inc a
 	ld [W2_UsePerTileColor], a
 	ld [W2_ForceBGPUpdate], a
 	xor a
@@ -336,8 +338,24 @@ TradeListPalette:
 ; Returns d = 1 if handled.
 OverworldColorPaletteCommand::
 	call PerTileColorOwnsBgOnCGB
+	jr nz, .perTile
 	ld d, 0
+	ldh a, [hOnCGB]
+	and a
 	ret z
+	ldh a, [rWBK]
+	ld b, a
+	ld a, 2
+	ldh [rWBK], a
+	ld a, [W2_MenuColorSuspended]
+	ld c, a
+	ld a, b
+	ldh [rWBK], a
+	ld a, c
+	and a
+	ret z
+	call ResumeOverworldColorAfterMenu
+.perTile
 	ld a, SET_PAL_OVERWORLD
 	ld [wDefaultPaletteCommand], a
 	call LoadTilesetPalette
@@ -353,6 +371,78 @@ OverworldColorPaletteCommand::
 	ldh [rWBK], a
 	ld d, 1
 	ret
+
+; d = a palette command other than SET_PAL_OVERWORLD, about to run. Full-screen
+; menus opened from the overworld (party, status, Pokedex, trainer card, naming,
+; slots...) lay out their own palettes and BG attributes. With per-tile color
+; still on, its window refresh overwrote their attributes and Yellow's palette
+; updates were skipped: party icons kept the colors of their list slots. Step
+; aside for them; SET_PAL_OVERWORLD on the way back resumes per-tile color.
+MenuPaletteCommand::
+	ld a, d
+	cp SET_PAL_STATUS_SCREEN
+	jr z, .handOff
+	cp SET_PAL_POKEDEX
+	jr z, .handOff
+	cp SET_PAL_SLOTS
+	jr z, .handOff
+	cp SET_PAL_GENERIC
+	jr z, .handOff
+	cp SET_PAL_PARTY_MENU
+	jr z, .handOff
+	cp SET_PAL_POKEMON_WHOLE_SCREEN
+	jr z, .handOff
+	cp SET_PAL_TRAINER_CARD
+	ret nz
+.handOff
+	call PerTileColorOwnsBgOnCGB
+	ret z
+	call ClearOverworldColor
+	ldh a, [rWBK]
+	ld b, a
+	ld a, 2
+	ldh [rWBK], a
+	ld a, 1
+	ld [W2_MenuColorSuspended], a
+	ld a, b
+	ldh [rWBK], a
+	ret
+
+; Back from a menu MenuPaletteCommand stepped aside for. Its palette layout also
+; wrote both BG maps' attributes (LoadBGMapAttributes), so with the LCD off,
+; recolor every BG map entry from its tile; the return path has the screen
+; whited out already. The caller reloads the palettes.
+ResumeOverworldColorAfterMenu:
+	ldh a, [rLCDC]
+	push af
+	and LCDC_ON
+	call nz, DisableLCD ; it waits for line 145, which never comes with the LCD off
+	ld a, 2
+	ldh [rWBK], a
+	xor a
+	ld [W2_MenuColorSuspended], a
+	inc a
+	ld [W2_UsePerTileColor], a
+	ld hl, vBGMap0
+	ld d, HIGH(W2_TilesetPaletteMap)
+.restamp
+	xor a
+	ldh [rVBK], a
+	ld e, [hl]
+	inc a
+	ldh [rVBK], a
+	ld a, [de]
+	ld [hli], a
+	ld a, h
+	cp HIGH(vBGMap1 + TILEMAP_AREA)
+	jr nz, .restamp
+	xor a
+	ldh [rVBK], a
+	ldh [rWBK], a
+	pop af
+	and LCDC_ON
+	ret z
+	jp EnableLCD
 
 ; Move effect sprites use OBJ palettes 2 and 3, which otherwise carry the two
 ; Pokemon's colors. Called around PlayAnimation in MoveAnimation, so the move's

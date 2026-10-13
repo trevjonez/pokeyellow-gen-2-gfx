@@ -80,5 +80,9 @@ DEF W2_CopyBgMapRowsLeft           EQU $d794
 DEF W2_RedrawPalettes              EQU $d6c0 ; 2 * SCREEN_WIDTH bytes, $d6c0-$d6e8
 DEF W2_RedrawPalettesReady         EQU $d795
 
+; Nonzero while a full-screen menu (party, status, Pokedex...) has the screen on
+; Yellow's own palettes; the next SET_PAL_OVERWORLD hands it back to per-tile color.
+DEF W2_MenuColorSuspended          EQU $d796
+
 ; In bank 1, the stack starts at $dfff. So, that's also the stack here when bank 2 is
 ; loaded. Don't use anything too close to there.
