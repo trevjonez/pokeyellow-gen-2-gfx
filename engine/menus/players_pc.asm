@@ -23,7 +23,7 @@ PlayerPCMenu:
 	set BIT_NO_MENU_BUTTON_SOUND, [hl]
 	call LoadScreenTilesFromBuffer2
 	hlcoord 0, 0
-	lb bc, 8, 14
+	lb bc, 10, 14
 	call TextBoxBorder
 	call UpdateSprites
 	hlcoord 2, 2
@@ -36,7 +36,7 @@ PlayerPCMenu:
 	ld [hli], a ; wTopMenuItemX
 	inc hl
 	inc hl
-	ld a, 3
+	ld a, 4
 	ld [hli], a ; wMaxMenuItem
 	ld a, PAD_A | PAD_B
 	ld [hli], a ; wMenuWatchedKeys
@@ -60,6 +60,8 @@ PlayerPCMenu:
 	jp z, PlayerPCDeposit
 	dec a
 	jp z, PlayerPCToss
+	dec a
+	jp z, PlayerPCChangeBox
 
 ExitPlayerPC:
 	ld a, [wMiscFlags]
@@ -81,6 +83,10 @@ ExitPlayerPC:
 	xor a
 	ld [wDoNotWaitForButtonPressAfterDisplayingText], a
 	ret
+
+PlayerPCChangeBox:
+	farcall ChangeItemBox
+	jp PlayerPCMenu
 
 PlayerPCDeposit:
 	xor a
@@ -243,6 +249,7 @@ PlayersPCMenuEntries:
 	db   "WITHDRAW ITEM"
 	next "DEPOSIT ITEM"
 	next "TOSS ITEM"
+	next "CHANGE BOX"
 	next "LOG OFF@"
 
 TurnedOnPC2Text:

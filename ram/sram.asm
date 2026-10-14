@@ -24,6 +24,9 @@ sTileAnimations:: db
 sGameDataEnd::
 sMainDataCheckSum:: db
 
+; PC item boxes; the current one lives in wNumBoxItems
+sItemBoxes:: ds NUM_BOXES * ITEM_BOX_SIZE
+
 
 ; The PC boxes will not fit into one SRAM bank,
 ; so they use multiple SECTIONs

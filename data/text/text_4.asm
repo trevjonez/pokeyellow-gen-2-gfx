@@ -36,6 +36,19 @@ _ChooseABoxText::
 	line "<PKMN> BOX.@"
 	text_end
 
+_WhenYouChangeItemBoxText::
+	text "When you change an"
+	line "item BOX, data"
+	cont "will be saved."
+
+	para "Is that okay?"
+	done
+
+_ChooseAnItemBoxText::
+	text "Choose an"
+	line "item BOX.@"
+	text_end
+
 _EvolvedText::
 	text_ram wStringBuffer
 	text " evolved"

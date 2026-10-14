@@ -1,5 +1,6 @@
 DEF BAG_ITEM_CAPACITY EQU 20
 DEF PC_ITEM_CAPACITY  EQU 50
+DEF ITEM_BOX_SIZE     EQU 1 + PC_ITEM_CAPACITY * 2 + 1 ; count, item/quantity pairs, terminator
 
 ; text box IDs
 	const_def 1

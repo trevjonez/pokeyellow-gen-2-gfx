@@ -12,6 +12,7 @@ This is a fork of [dannye/pokeyellow-gen-2-gfx](https://github.com/dannye/pokeye
 - Colored overworld sprites, including the yellow follower Pikachu.
 - Battle transitions, text boxes, menus, the town map and Pikachu's portrait keep their colors.
 - Many tiles that read as gray next to colored neighbors are recolored. Examples are flowers, signs, posts, stools, shelves, beds, stairs, cliffs and floors.
+- The PC's item storage has 12 boxes of 50 items, switched with CHANGE BOX like the Pokémon boxes. Existing saves keep their items in box 1.
 
 It is tested on a ModRetro Chromatic through an EverDrive-GB X7.
 

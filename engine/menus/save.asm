@@ -382,6 +382,7 @@ ChangeBox::
 	call GetBoxSRAMLocation
 	ld de, wBoxDataStart
 	call CopyBoxToOrFromSRAM ; copy new box from SRAM to WRAM
+SaveAfterBoxChange:
 	ld hl, wCurMapTextPtr
 	ld de, wChangeBoxSavedMapTextPointer
 	ld a, [hli]
@@ -424,6 +425,16 @@ CopyBoxToOrFromSRAM:
 	ret
 
 DisplayChangeBoxMenu:
+	call GetMonCountsForAllBoxes
+	ld de, ChooseABoxText
+	ld a, [wCurrentBoxNum]
+; fallthrough
+DrawChangeBoxMenu:
+; a = current box (bit 7 ignored), de = prompt, wBoxMonCounts = how full each box is
+	push de
+	and BOX_NUM_MASK
+	ld [wCurrentMenuItem], a
+	ld [wLastMenuItem], a
 	xor a
 	ldh [hAutoBGTransferEnabled], a
 	ld a, PAD_A | PAD_B
@@ -436,15 +447,11 @@ DisplayChangeBoxMenu:
 	ld [wTopMenuItemX], a
 	xor a
 	ld [wMenuWatchMovingOutOfBounds], a
-	ld a, [wCurrentBoxNum]
-	and BOX_NUM_MASK
-	ld [wCurrentMenuItem], a
-	ld [wLastMenuItem], a
 	hlcoord 0, 0
 	lb bc, 2, 9
 	call TextBoxBorder
 	call SendPokeballPal
-	ld hl, ChooseABoxText
+	pop hl
 	call PrintText
 	hlcoord 11, 0
 	lb bc, 12, 7
@@ -456,8 +463,7 @@ DisplayChangeBoxMenu:
 	call PlaceString
 	ld hl, hUILayoutFlags
 	res BIT_SINGLE_SPACED_LINES, [hl]
-	ld a, [wCurrentBoxNum]
-	and BOX_NUM_MASK
+	ld a, [wCurrentMenuItem]
 	cp 9
 	jr c, .singleDigitBoxNum
 	sub 9
@@ -472,7 +478,6 @@ DisplayChangeBoxMenu:
 	hlcoord 1, 2
 	ld de, BoxNoText
 	call PlaceString
-	call GetMonCountsForAllBoxes
 	hlcoord 18, 1
 	ld de, wBoxMonCounts
 	ld bc, SCREEN_WIDTH
@@ -702,4 +707,108 @@ DisableSRAM:
 	ld [rBMODE], a
 	ASSERT RAMG_SRAM_DISABLE == BMODE_SIMPLE
 	ld [rRAMG], a
+	ret
+
+ChangeItemBox::
+	ld hl, WhenYouChangeItemBoxText
+	call PrintText
+	call YesNoChoice
+	ld a, [wCurrentMenuItem]
+	and a
+	ret nz ; return if No was chosen
+	ld hl, wCurrentItemBoxNum
+	bit BIT_HAS_CHANGED_BOXES, [hl] ; first change? the SRAM boxes were never written
+	call z, EmptyAllSRAMItemBoxes
+	call GetItemCountsForAllBoxes
+	ld de, ChooseAnItemBoxText
+	ld a, [wCurrentItemBoxNum]
+	call DrawChangeBoxMenu
+	call UpdateSprites
+	ld hl, hUILayoutFlags
+	set BIT_DOUBLE_SPACED_MENU, [hl]
+	call HandleMenuInput
+	ld hl, hUILayoutFlags
+	res BIT_DOUBLE_SPACED_MENU, [hl]
+	bit B_PAD_B, a
+	ret nz
+	ld a, SFX_SAVE
+	call PlaySoundWaitForCurrent
+	call WaitForSoundToFinish
+	call EnableSRAM
+	ld a, BANK(sItemBoxes)
+	ld [rRAMB], a
+	ld a, [wCurrentItemBoxNum]
+	call GetItemBoxSRAMLocation
+	ld e, l
+	ld d, h
+	ld hl, wNumBoxItems
+	ld bc, ITEM_BOX_SIZE
+	call CopyData ; old box from WRAM to SRAM
+	ld a, [wCurrentMenuItem]
+	set BIT_HAS_CHANGED_BOXES, a
+	ld [wCurrentItemBoxNum], a
+	call GetItemBoxSRAMLocation
+	ld de, wNumBoxItems
+	ld bc, ITEM_BOX_SIZE
+	call CopyData ; new box from SRAM to WRAM
+	call DisableSRAM
+	jp SaveAfterBoxChange
+
+WhenYouChangeItemBoxText:
+	text_far _WhenYouChangeItemBoxText
+	text_end
+
+ChooseAnItemBoxText:
+	text_far _ChooseAnItemBoxText
+	text_end
+
+GetItemBoxSRAMLocation:
+; hl = SRAM item box a (bit 7 ignored)
+	and BOX_NUM_MASK
+	ld hl, sItemBoxes
+	ld bc, ITEM_BOX_SIZE
+	jp AddNTimes
+
+EmptyAllSRAMItemBoxes:
+	call EnableSRAM
+	ld a, BANK(sItemBoxes)
+	ld [rRAMB], a
+	ld hl, sItemBoxes
+	ld de, ITEM_BOX_SIZE
+	ld b, NUM_BOXES
+.loop
+	ld [hl], 0 ; no items
+	inc hl
+	ld [hl], $ff ; list terminator
+	dec hl
+	add hl, de
+	dec b
+	jr nz, .loop
+	jp DisableSRAM
+
+GetItemCountsForAllBoxes:
+	call EnableSRAM
+	ld a, BANK(sItemBoxes)
+	ld [rRAMB], a
+	ld hl, sItemBoxes
+	ld de, wBoxMonCounts
+	ld bc, ITEM_BOX_SIZE
+.loop
+	ld a, [hl]
+	ld [de], a
+	add hl, bc
+	inc de
+	ld a, e
+	cp LOW(wBoxMonCounts + NUM_BOXES)
+	jr nz, .loop
+	call DisableSRAM
+; the current box is in WRAM
+	ld a, [wCurrentItemBoxNum]
+	and BOX_NUM_MASK
+	ld e, a
+	ld d, 0
+	ld hl, wBoxMonCounts
+	add hl, de
+	ld a, [wNumBoxItems]
+	ld [hl], a
 	ret
