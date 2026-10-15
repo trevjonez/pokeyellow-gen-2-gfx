@@ -2825,12 +2825,14 @@ TossBallAnimation:
 	ld [wAnimationID], a
 	push bc
 	push hl
+	farcall SetBallAnimPalette
 	call PlayAnimation
 	pop hl
 	ld a, [hli]
 	pop bc
 	dec c
 	jr nz, .PlayNextAnimation
+	farcall ClearBallAnimPalette
 	ret
 
 .PokeBallAnimations:
@@ -2840,12 +2842,15 @@ TossBallAnimation:
 .BlockBall
 	ld a, TOSS_ANIM
 	ld [wAnimationID], a
+	farcall SetBallAnimPalette
 	call PlayAnimation
 	ld a, SFX_FAINT_THUD
 	call PlaySound
 	ld a, BLOCKBALL_ANIM
 	ld [wAnimationID], a
-	jp PlayAnimation
+	call PlayAnimation
+	farcall ClearBallAnimPalette
+	ret
 
 PlayApplyingAttackSound:
 ; play a different sound depending if move is not very effective, neutral, or super-effective

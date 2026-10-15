@@ -499,3 +499,4 @@ CGBAttackPalettes:
 	RGB 31,31,31, 20,30,31, 09,22,30, 04,12,24 ; ice: Ice
 	RGB 31,31,31, 26,16,30, 18,06,24, 10,02,16 ; purple: Poison, Ghost, Psychic
 	RGB 31,31,31, 31,28,18, 29,23,12, 25,17,07 ; sand: Sand-Attack (AttackMovePalettes)
+	RGB 31,31,31, 31,20,18, 28,06,04, 20,02,02 ; ball: a thrown Poke Ball (SetBallAnimPalette)

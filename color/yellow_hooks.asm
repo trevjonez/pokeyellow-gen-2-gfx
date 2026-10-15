@@ -507,11 +507,11 @@ RestoreAttackTypePalette::
 	ldh a, [hOnCGB]
 	and a
 	ret z
-	ld a, 2
-	ldh [rWBK], a
-	xor a
-	ld [W2_AttackPalPointer], a
-	ldh [rWBK], a
+	; Razor Leaf's falling leaves set rOBP0 to wAnimPalette and never put it back.
+	; Restore what SetAnimationPalette gave every move, so no effect's shades stick.
+	ld a, $e4
+	ldh [rOBP0], a
+	call ClearAttackPalPointer
 ; fallthrough
 ; Reconvert OBP0 into the CGB OBJ palettes even if rOBP0 did not change.
 RefreshAttackPalettes:
@@ -519,6 +519,53 @@ RefreshAttackPalettes:
 	cpl
 	ld [wLastOBP0], a
 	jp UpdateCGBPal_OBP0
+
+ClearAttackPalPointer:
+	ld a, 2
+	ldh [rWBK], a
+	xor a
+	ld [W2_AttackPalPointer], a
+	ldh [rWBK], a
+	ret
+
+; A thrown Poke Ball is drawn in OBJ palettes 2 and 3 like move effects, which
+; otherwise carry the two Pokemon's colors. TossBallAnimation calls this before
+; each part: the ball (toss, shakes, a trainer blocking it) gets the ball palette,
+; the smoke and the pic hiding or showing get the Pokemon colors back.
+SetBallAnimPalette::
+	ldh a, [hOnCGB]
+	and a
+	ret z
+	ld a, [wAnimationID]
+	cp POOF_ANIM
+	jr z, ClearAttackPalPointer
+	cp TOSS_ANIM
+	jr c, ClearAttackPalPointer
+	cp ULTRATOSS_ANIM + 1
+	jr nc, ClearAttackPalPointer
+	ld hl, CGBAttackPalettes + 9 * PAL_SIZE ; ball
+	ld a, 2
+	ldh [rWBK], a
+	ld a, h
+	ld [W2_AttackPalPointer], a
+	ld a, l
+	ld [W2_AttackPalPointer + 1], a
+	xor a
+	ldh [rWBK], a
+	ret
+
+; After the toss. A caught ball (last part: shaking) stays on screen through the
+; text, so its colors stay in the palettes; anything later converts OBP0 without
+; the ball palette. Otherwise the ball is gone: reconvert now.
+ClearBallAnimPalette::
+	ldh a, [hOnCGB]
+	and a
+	ret z
+	call ClearAttackPalPointer
+	ld a, [wAnimationID]
+	cp SHAKE_ANIM
+	ret z
+	jr RefreshAttackPalettes
 
 ; Moves whose effect reads better in another CGBAttackPalettes entry than
 ; their type's: move, palette.
