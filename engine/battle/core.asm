@@ -46,6 +46,12 @@ SlidePlayerAndEnemySilhouettesOnScreen:
 .noCarry
 	dec b
 	jr nz, .copyRowLoop
+	; The battle palettes, so the pics slide in colored instead of as
+	; silhouettes. Set while the LCD is off: with the screen still held at
+	; rBGP $ff, the battle layout's HUD palettes showed as near-black boxes
+	; over the transition's black.
+	ld b, SET_PAL_BATTLE
+	call RunPaletteCommand
 	; Turning the LCD off shows white on the GBC. Come back on all white too,
 	; instead of in the battle transition's black palette for the few frames
 	; before the slide sets the real one: that blinked dark between whites.
@@ -6377,7 +6383,8 @@ DoBattleTransitionAndInitBattleVariables:
 	call Delay3
 	farcall ClearOverworldColor
 .keepOverworldColor
-	callfar LoadHudAndHpBarAndStatusTilePatterns
+	; The HUD tiles load in SlidePlayerAndEnemySilhouettesOnScreen, with the LCD
+	; off; loading them here too only held the black screen ~8 frames longer.
 	ld a, $1
 	ldh [hAutoBGTransferEnabled], a
 	ld a, $ff

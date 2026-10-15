@@ -98,11 +98,6 @@ InitWildBattle:
 
 ; common code that executes after init battle code specific to trainer or wild battles
 _InitBattleCommon:
-	; The battle palettes from the start, so the pics slide in colored instead
-	; of as silhouettes; SlidePlayerAndEnemySilhouettesOnScreen ends on the same
-	; SET_PAL_BATTLE.
-	ld b, SET_PAL_BATTLE
-	call RunPaletteCommand
 	callfar SlidePlayerAndEnemySilhouettesOnScreen
 	xor a
 	ldh [hAutoBGTransferEnabled], a
