@@ -528,7 +528,7 @@ ClearAttackPalPointer:
 	ldh [rWBK], a
 	ret
 
-; A thrown Poke Ball is drawn in OBJ palettes 2 and 3 like move effects, which
+; A thrown ball, colored by its type, is drawn in OBJ palettes 2 and 3 like move effects, which
 ; otherwise carry the two Pokemon's colors. TossBallAnimation calls this before
 ; each part: the ball (toss, shakes, a trainer blocking it) gets the ball palette,
 ; the smoke and the pic hiding or showing get the Pokemon colors back.
@@ -543,7 +543,15 @@ SetBallAnimPalette::
 	jr c, ClearAttackPalPointer
 	cp ULTRATOSS_ANIM + 1
 	jr nc, ClearAttackPalPointer
-	ld hl, CGBAttackPalettes + 9 * PAL_SIZE ; ball
+	ld a, [wCurItem] ; MASTER_BALL to POKE_BALL are 1-4; anything else is the Safari Ball
+	dec a
+	cp POKE_BALL
+	jr c, .gotBall
+	ld a, POKE_BALL
+.gotBall
+	ld hl, CGBAttackPalettes + 9 * PAL_SIZE ; Master Ball
+	ld bc, PAL_SIZE
+	call AddNTimes
 	ld a, 2
 	ldh [rWBK], a
 	ld a, h

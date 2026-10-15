@@ -499,4 +499,9 @@ CGBAttackPalettes:
 	RGB 31,31,31, 20,30,31, 09,22,30, 04,12,24 ; ice: Ice
 	RGB 31,31,31, 26,16,30, 18,06,24, 10,02,16 ; purple: Poison, Ghost, Psychic
 	RGB 31,31,31, 31,28,18, 29,23,12, 25,17,07 ; sand: Sand-Attack (AttackMovePalettes)
-	RGB 31,31,31, 31,20,18, 28,06,04, 20,02,02 ; ball: a thrown Poke Ball (SetBallAnimPalette)
+; Thrown balls by item, MASTER_BALL to POKE_BALL then the Safari Ball (SetBallAnimPalette)
+	RGB 31,31,31, 26,18,30, 20,06,26, 12,02,16 ; Master Ball
+	RGB 31,31,31, 31,28,12, 30,22,00, 08,08,08 ; Ultra Ball
+	RGB 31,31,31, 18,22,31, 07,13,31, 02,04,16 ; Great Ball
+	RGB 31,31,31, 31,20,18, 28,06,04, 20,02,02 ; Poke Ball
+	RGB 31,31,31, 20,28,12, 08,21,08, 02,10,02 ; Safari Ball
