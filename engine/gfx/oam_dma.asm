@@ -1,4 +1,5 @@
 WriteDMACodeToHRAM::
+	farcall ResetGbcState ; Init's only banked call with the LCD off; ROM0 is full
 ; Since no other memory is available during OAM DMA,
 ; DMARoutine is copied to HRAM and executed there.
 	ld c, LOW(hDMARoutine)
