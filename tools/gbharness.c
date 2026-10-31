@@ -164,6 +164,24 @@ int main(int argc, char** argv) {
       printf(" ");
       for (int i = 0; i < TILE_MAP_SIZE; i++) printf("%02x", attrs[i]);
       printf("\n");
+    } else if (strncmp(line, "tiles", 5) == 0) {
+      /* Both VRAM banks' tiles as color indices, read past the PPU's VRAM lock. */
+      static TileData tiles;
+      emulator_get_tile_data(e, tiles);
+      printf("tiles ");
+      for (size_t i = 0; i < sizeof(tiles); i++) printf("%x", tiles[i] & 3);
+      printf("\n");
+    } else if (strncmp(line, "cgbpal", 6) == 0) {
+      printf("cgbpal ");
+      for (int t = 0; t < 2; t++)
+        for (int i = 0; i < 8; i++) {
+          PaletteRGBA pal = emulator_get_cgb_palette_rgba(e, t ? CGB_PALETTE_TYPE_OBCP : CGB_PALETTE_TYPE_BGCP, i);
+          for (int c = 0; c < 4; c++) printf("%08x", pal.color[c]);
+        }
+      printf("\n");
+    } else if (strncmp(line, "regs", 4) == 0) {
+      Registers r = emulator_get_registers(e);
+      printf("regs pc=%04x sp=%04x af=%02x bc=%04x de=%04x hl=%04x\n", r.PC, r.SP, r.A, r.BC, r.DE, r.HL);
     } else if (sscanf(line, "echo %999[^\n]", arg) == 1) {
       printf("%s\n", arg);
     }
