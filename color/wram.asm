@@ -84,6 +84,16 @@ DEF W2_RedrawPalettesReady         EQU $d795
 ; Yellow's own palettes; the next SET_PAL_OVERWORLD hands it back to per-tile color.
 DEF W2_MenuColorSuspended          EQU $d796
 
+; Staging for FastCopyVideoData and LoadMapVramAndColorsDMA (VRAM DMA reads
+; 16-byte-aligned sources). LoadCurrentMapView rebuilds wSurroundingTiles on every map
+; load, so its union with wTileMapBackup (480 bytes) is scratch during one.
+DEF FAST_COPY_STAGING EQUS "((wTileMapBackup + 15) & $fff0)"
+DEF FAST_COPY_MAX_TILES EQU 28 ; what still fits after aligning
+
+; FastHDMARun, copied here by BeginMapLoad: it maps another ROM bank for an
+; HBlank DMA straight from ROM, so it can't run from ROMX itself.
+DEF W2_FastHDMARun                 EQU $d800 ; FastHDMARunEnd - FastHDMARun bytes
+
 ; Halvings toward black (+$80: toward white) for the current fade step. See GetFadeStep.
 DEF W2_FadeMode                    EQU $d797
 

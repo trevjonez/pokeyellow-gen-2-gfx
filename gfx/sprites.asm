@@ -1,4 +1,4 @@
-SECTION "NPC Sprites 1", ROMX
+SECTION "NPC Sprites 1", ROMX, ALIGN[4] ; FastCopyVideoData DMAs them from ROM
 
 ScientistSprite::        INCBIN "gfx/sprites/scientist.2bpp"
 RockerSprite::           INCBIN "gfx/sprites/rocker.2bpp"
@@ -30,7 +30,7 @@ GamblerAsleepSprite::    INCBIN "gfx/sprites/gambler_asleep.2bpp"
 QuestionMarkSprite::     INCBIN "gfx/sprites/question_mark.2bpp"
 
 
-SECTION "NPC Sprites 2", ROMX
+SECTION "NPC Sprites 2", ROMX, ALIGN[4] ; FastCopyVideoData DMAs them from ROM
 
 RedBikeSprite::          INCBIN "gfx/sprites/red_bike.2bpp"
 RedSprite::              INCBIN "gfx/sprites/red.2bpp"
@@ -74,7 +74,7 @@ LoreleiSprite::          INCBIN "gfx/sprites/lorelei.2bpp"
 SeelSprite::             INCBIN "gfx/sprites/seel.2bpp"
 
 
-SECTION "NPC Sprites 3", ROMX
+SECTION "NPC Sprites 3", ROMX, ALIGN[4] ; FastCopyVideoData DMAs them from ROM
 
 OfficerJennySprite::     INCBIN "gfx/sprites/officer_jenny.2bpp"
 PikachuSprite::          INCBIN "gfx/sprites/pikachu.2bpp"

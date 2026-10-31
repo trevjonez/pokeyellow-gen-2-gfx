@@ -381,7 +381,11 @@ hSavedMapTextPtr:: dw
 	ds 1
 ENDU
 
-	ds 4
+; Nonzero while LoadMapData keeps the LCD on: CopyVideoData stages through
+; wLYOverrides and DMAs in vblank instead. See BeginMapLoad.
+hFastVRAMCopy:: db
+hFastCopyBank:: db
+hFastCopyDest:: dw
 
 hWhoseTurn:: db ; 0 on player's turn, 1 on enemy's turn
 

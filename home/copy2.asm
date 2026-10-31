@@ -42,6 +42,7 @@ CopyVideoData::
 ; Wait for the next VBlank, then copy c 2bpp
 ; tiles from b:de to hl, 8 tiles at a time.
 ; This takes c/8 frames.
+	rst $18 ; FastCopyVideoData instead while a map loads with the LCD on
 
 	ldh a, [hAutoBGTransferEnabled]
 	push af

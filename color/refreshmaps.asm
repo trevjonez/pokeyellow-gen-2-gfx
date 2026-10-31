@@ -63,6 +63,86 @@ LoadMapVramAndColors::
 	ret
 
 
+; LoadMapVramAndColors for a map loaded with the LCD on (BeginMapLoad). The view
+; is at vBGMap0 (LoadMapData resets the camera). Whole 32-tile rows go out by
+; FastHDMA, nine at a time through FastCopyVideoData's staging buffer; columns
+; 20-31 are off screen until a scroll redraws them.
+LoadMapVramAndColorsDMA::
+	ld a, LOW(vBGMap0)
+	ldh [hFastCopyDest], a
+	ld a, HIGH(vBGMap0)
+	ldh [hFastCopyDest + 1], a
+	hlcoord 0, 0
+	call .nineRows
+.nineRows
+	push hl
+	ld de, FAST_COPY_STAGING
+	ld b, 9
+.tileRow
+	ld c, SCREEN_WIDTH
+.tile
+	ld a, [hli]
+	ld [de], a
+	inc de
+	dec c
+	jr nz, .tile
+	call .nextStagingRow
+	dec b
+	jr nz, .tileRow
+	ldh a, [hFastCopyDest]
+	push af
+	ldh a, [hFastCopyDest + 1]
+	push af
+	ld a, 9 * TILEMAP_WIDTH / 16
+	ld hl, FAST_COPY_STAGING
+	ld b, BANK(@)
+	call FastHDMA
+	pop af
+	ldh [hFastCopyDest + 1], a
+	pop af
+	ldh [hFastCopyDest], a
+	pop hl
+	ld de, FAST_COPY_STAGING
+	ld a, 2
+	ldh [rWBK], a
+	ld b, 9
+.attrRow
+	ld c, SCREEN_WIDTH
+.attr
+	ld a, [hli]
+	push hl
+	ld h, HIGH(W2_TilesetPaletteMap)
+	ld l, a
+	ld a, [hl]
+	pop hl
+	ld [de], a
+	inc de
+	dec c
+	jr nz, .attr
+	call .nextStagingRow
+	dec b
+	jr nz, .attrRow
+	xor a
+	ldh [rWBK], a
+	push hl
+	ld a, 1
+	ldh [rVBK], a
+	ld a, 9 * TILEMAP_WIDTH / 16
+	ld hl, FAST_COPY_STAGING
+	ld b, BANK(@)
+	call FastHDMA
+	xor a
+	ldh [rVBK], a
+	pop hl
+	ret
+
+.nextStagingRow
+	ld a, e
+	add TILEMAP_WIDTH - SCREEN_WIDTH
+	ld e, a
+	ret nc
+	inc d
+	ret
 
 ; Refresh 1/3 of the window each frame. Called during vblank.
 RefreshWindow::

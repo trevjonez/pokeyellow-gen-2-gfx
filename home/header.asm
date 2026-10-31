@@ -5,10 +5,11 @@ SECTION "rst0", ROM0[$0000]
 
 	ds $08 - @, 0 ; unused
 
+; LoadMapData's DisableLCD. Home is full, so it reaches BeginMapLoad here.
 SECTION "rst8", ROM0[$0008]
-	rst $38
-
-	ds $10 - @, 0 ; unused
+	ld b, BANK(BeginMapLoad)
+	ld hl, BeginMapLoad
+	jp Bankswitch
 
 ; Line-$6e color prepare. Home is full, so the LCD handler reaches it
 ; through this slot instead of a farcall.
@@ -17,18 +18,22 @@ SECTION "rst10", ROM0[$0010]
 	ld hl, YellowLcdPrepare
 	jp Bankswitch
 
+; Top of CopyVideoData (b:de -> hl, c tiles). While a map loads with the LCD
+; on, hand the copy to FastCopyVideoData and return to CopyVideoData's caller.
 SECTION "rst18", ROM0[$0018]
-	rst $38
-
-	ds $20 - @, 0 ; unused
-
-SECTION "rst20", ROM0[$0020]
-	rst $38
-
-	ds $28 - @, 0 ; unused
-
-SECTION "rst28", ROM0[$0028]
-	rst $38
+	ldh a, [hFastVRAMCopy]
+	and a
+	ret z
+	pop af ; CopyVideoData's return address
+	ld a, b
+	ldh [hFastCopyBank], a
+	ld a, l
+	ldh [hFastCopyDest], a
+	ld a, h
+	ldh [hFastCopyDest + 1], a
+	ld b, BANK(FastCopyVideoData)
+	ld hl, FastCopyVideoData
+	jp Bankswitch
 
 	ds $30 - @, 0 ; unused
 

@@ -8,11 +8,7 @@ ROM0
 	org $0010
 	"rst10"
 	org $0018
-	"rst18"
-	org $0020
-	"rst20"
-	org $0028
-	"rst28"
+	"rst18" ; through $002f: CopyVideoData's hook
 	org $0030
 	"rst30"
 	org $0038
@@ -45,10 +41,12 @@ ROMX $3
 	"bank3"
 ROMX $4
 	"bank4"
+	align 4 ; FastCopyVideoData DMAs NPC sprites straight from ROM
 	"NPC Sprites 1"
 	"Battle Engine 1"
 ROMX $5
 	"bank5"
+	align 4 ; FastCopyVideoData DMAs NPC sprites straight from ROM
 	"NPC Sprites 2"
 	"Battle Engine 2"
 ROMX $6
@@ -226,6 +224,7 @@ ROMX $3E
 	"Surfing Minigame"
 ROMX $3F
 	"Overworld Pikachu"
+	align 4 ; FastCopyVideoData DMAs NPC sprites straight from ROM
 	"NPC Sprites 3"
 WRAM0
 	"Audio RAM"

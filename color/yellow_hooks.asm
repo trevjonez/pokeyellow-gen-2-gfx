@@ -58,6 +58,8 @@ ResumeOverworldColor::
 	ret
 
 ; LCD is off. Loads the tileset palettes, writes them, and stamps the attribute map.
+; From a LoadMapData that kept the LCD on (BeginMapLoad), the screen is blank:
+; DMA the map in and let vblank upload the palettes.
 ApplyOverworldColor::
 	ld a, 2
 	ldh [rWBK], a
@@ -66,16 +68,222 @@ ApplyOverworldColor::
 	inc a
 	ld [W2_UsePerTileColor], a
 	ld [W2_ForceBGPUpdate], a
+	ld [W2_ForceOBPUpdate], a
 	xor a
 	ldh [rWBK], a
 	call LoadTilesetPalette
 	call LoadOverworldSpritePalettes
+	ldh a, [hFastVRAMCopy]
+	and a
+	jr z, .lcdOff
+	xor a
+	ldh [hFastVRAMCopy], a
+	jp LoadMapVramAndColorsDMA
+.lcdOff
 	call GbcPrepareVBlank
 	ld a, 1
 	call UploadBgPalettes
 	ld a, 1
 	call UploadObjPalettes
 	jp LoadMapVramAndColors
+
+; In place of LoadMapData's DisableLCD. Turning the LCD off shows white on the
+; GBC, a flash in the middle of the fade to black. While the screen is blank
+; anyway (every palette black or white), leave it on: CopyVideoData then goes
+; through FastCopyVideoData, and ApplyOverworldColor DMAs the map.
+BeginMapLoad::
+	ldh a, [hOnCGB]
+	and a
+	jp z, DisableLCD
+	ldh a, [rLCDC]
+	bit B_LCDC_ENABLE, a
+	ret z
+	ldh a, [rBGP]
+	ld b, a
+	ldh a, [rOBP0]
+	cp b
+	jp nz, DisableLCD
+	ldh a, [rOBP1]
+	cp b
+	jp nz, DisableLCD
+	inc a
+	jr z, .blank ; all black
+	dec a
+	jp nz, DisableLCD
+.blank ; or all white
+	ld a, 2
+	ldh [rWBK], a
+	ld hl, FastHDMARun
+	ld de, W2_FastHDMARun
+	ld c, FastHDMARunEnd - FastHDMARun
+.copyRun
+	ld a, [hli]
+	ld [de], a
+	inc de
+	dec c
+	jr nz, .copyRun
+	xor a
+	ldh [rWBK], a
+	inc a
+	ldh [hFastVRAMCopy], a
+	ret
+
+; Runs from W2_FastHDMARun, with interrupts off and the DMA registers but HDMA5
+; set: maps ROM bank b, starts an HBlank DMA of c, waits for it, and maps back
+; hLoadedROMBank.
+FastHDMARun:
+	ld a, b
+	ld [rROMB], a
+	ld a, c
+	ldh [rHDMA5], a
+.busy
+	ldh a, [rHDMA5]
+	inc a ; $ff when done
+	jr nz, .busy
+	ldh a, [hLoadedROMBank]
+	ld [rROMB], a
+	ret
+FastHDMARunEnd:
+
+ASSERT FAST_COPY_STAGING + FAST_COPY_MAX_TILES * TILE_SIZE <= wTileMapBackup + 480 ; the union's size
+
+; From CopyVideoData through rst $18: copy c tiles from [hFastCopyBank]:de to
+; [hFastCopyDest] with the LCD on. The DMA reads 16-byte-aligned sources, so
+; aligned graphics (tilesets, NPC sprites) go straight from ROM; anything else
+; (the text box) through the staging buffer.
+FastCopyVideoData::
+	ld a, e
+	and $f
+	jr nz, .staged
+.direct
+	ld a, c
+	and a
+	ret z
+	cp 112 + 1 ; still leaves a chunk room to start, with 30 lines to spare
+	jr c, .gotDirectCount
+	ld a, 112
+.gotDirectCount
+	ld b, a
+	push bc
+	ld h, d
+	ld l, e
+	ldh a, [hFastCopyBank]
+	ld c, a
+	ld a, b
+	ld b, c
+	call FastHDMA
+	pop bc
+	ld d, h
+	ld e, l
+	ld a, c
+	sub b
+	ld c, a
+	jr .direct
+
+.staged
+	ld a, c
+	and a
+	ret z
+	cp FAST_COPY_MAX_TILES + 1
+	jr c, .gotCount
+	ld a, FAST_COPY_MAX_TILES
+.gotCount
+	ld b, a
+	push bc
+	push de
+	ld l, a
+	ld h, 0
+	add hl, hl
+	add hl, hl
+	add hl, hl
+	add hl, hl
+	ld b, h
+	ld c, l
+	ld h, d
+	ld l, e
+	ld de, FAST_COPY_STAGING
+	ldh a, [hFastCopyBank]
+	call FarCopyData
+	pop de
+	pop bc
+	push bc
+	push de
+	ld a, b
+	ld hl, FAST_COPY_STAGING
+	ld b, BANK(@)
+	call FastHDMA
+	pop de
+	pop bc
+	ld l, b
+	ld h, 0
+	add hl, hl
+	add hl, hl
+	add hl, hl
+	add hl, hl
+	add hl, de
+	ld d, h
+	ld e, l
+	ld a, c
+	sub b
+	ld c, a
+	jr .staged
+
+; Copy a blocks of 16 bytes from b:hl to [hFastCopyDest] in rVBK's bank, with
+; the LCD on; hl and [hFastCopyDest] end up past them. HBlank DMA moves one
+; block per hblank by itself, so this doesn't wait for vblank: 28 tiles take 28
+; lines. (The vblank handler can use all of vblank during a map load, which
+; left no room for a GDMA.) The DMA reads rVBK and its registers live, and the
+; vblank handler, which can run past line 153 here, sets both. So a chunk
+; starts only if it ends before vblank, with interrupts off until it's done.
+FastHDMA::
+	ld c, a
+.wait
+	ldh a, [rLY]
+	add c
+	cp LY_VBLANK - 2
+	jr nc, .wait
+	di
+	ldh a, [rLY]
+	add c
+	cp LY_VBLANK - 2
+	jr c, .go
+	ei
+	jr .wait
+.go
+	ld a, h
+	ldh [rHDMA1], a
+	ld a, l
+	ldh [rHDMA2], a
+	ldh a, [hFastCopyDest + 1]
+	ldh [rHDMA3], a
+	ldh a, [hFastCopyDest]
+	ldh [rHDMA4], a
+	push bc
+	ld a, c
+	dec a
+	or VDMA_LEN_MODE_HBLANK
+	ld c, a
+	ld a, 2
+	ldh [rWBK], a
+	call W2_FastHDMARun
+	xor a
+	ldh [rWBK], a
+	pop bc
+	ei
+	ld e, c
+	ld d, 0
+REPT 4
+	sla e
+	rl d
+ENDR
+	add hl, de
+	ldh a, [hFastCopyDest]
+	add e
+	ldh [hFastCopyDest], a
+	ldh a, [hFastCopyDest + 1]
+	adc d
+	ldh [hFastCopyDest + 1], a
+	ret
 
 ; Called at the start of VBlank, after rWBK has been switched to bank 1.
 ; Uploads palettes the line-$6e interrupt prepared, then arms that interrupt
