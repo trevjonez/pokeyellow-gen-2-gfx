@@ -84,5 +84,8 @@ DEF W2_RedrawPalettesReady         EQU $d795
 ; Yellow's own palettes; the next SET_PAL_OVERWORLD hands it back to per-tile color.
 DEF W2_MenuColorSuspended          EQU $d796
 
+; Halvings toward black (+$80: toward white) for the current fade step. See GetFadeStep.
+DEF W2_FadeMode                    EQU $d797
+
 ; In bank 1, the stack starts at $dfff. So, that's also the stack here when bank 2 is
 ; loaded. Don't use anything too close to there.

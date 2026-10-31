@@ -105,6 +105,11 @@ RefreshPalettesPreVBlank:
 	call SetBlackColor
 	jr .checkSprPalettes
 .bgpNotBlack
+	call GetFadeStep
+	jr nc, .doNextBgPal
+	ld c, 8
+	call FadePalettes
+	jr .checkSprPalettes
 
 .doNextBgPal:
 	ld e, 4
@@ -153,6 +158,13 @@ RefreshPalettesPreVBlank:
 	call SetBlackColor
 	jr .end
 .obpNotBlack
+	; Mid-fade, sprites follow the BG fade so they all darken together.
+	ldh a, [rBGP]
+	call GetFadeStep
+	jr nc, .doNextSprPal
+	ld c, 8
+	call FadePalettes
+	jr .end
 
 .doNextSprPal
 	ld e, 4
@@ -456,6 +468,93 @@ endr
 	ret nc
 	cp $90
 	ccf
+	ret
+
+; The fade routines (GBFadeOutToBlack and friends) step rBGP through these
+; values. Remapping color indices makes each palette shift hue on its own, so
+; scale the real colors instead: halve each channel's distance to black or white.
+; a = rBGP. Sets carry and W2_FadeMode (halvings, +$80 toward white) on a fade step.
+GetFadeStep:
+	ld c, 1
+	cp %11111001
+	jr z, .found
+	ld c, 2
+	cp %11111110
+	jr z, .found
+	ld c, $81
+	cp %10010000
+	jr z, .found
+	ld c, $82
+	cp %01000000
+	jr z, .found
+	and a
+	ret
+.found
+	ld a, c
+	ld [W2_FadeMode], a
+	scf
+	ret
+
+; Writes c palettes from W2_BgPaletteData starting at palette #b to hl, faded
+; by W2_FadeMode.
+FadePalettes:
+	ld a, b
+	add a
+	add a
+	add a
+	ld e, a
+	ld d, HIGH(W2_BgPaletteData)
+	ld a, c
+	add a
+	add a
+	ld c, a
+.loop
+	push bc
+	ld a, [de]
+	inc de
+	ld c, a
+	ld a, [de]
+	inc de
+	ld b, a
+	ld a, [W2_FadeMode]
+	add a
+	call c, .invert
+	call .halve
+	ld a, [W2_FadeMode]
+	bit 1, a
+	call nz, .halve
+	ld a, [W2_FadeMode]
+	add a
+	call c, .invert
+	ld a, c
+	ld [hli], a
+	ld a, b
+	ld [hli], a
+	pop bc
+	dec c
+	jr nz, .loop
+	ret
+
+; bc = 0bbbbbgg gggrrrrr; halve each channel
+.halve
+	srl b
+	rr c
+	ld a, c
+	and %11101111
+	ld c, a
+	ld a, b
+	and %00111101
+	ld b, a
+	ret
+
+.invert
+	ld a, c
+	cpl
+	ld c, a
+	ld a, b
+	cpl
+	and %01111111
+	ld b, a
 	ret
 
 ; Sets a palette color from palette #b to the index of last 2 bits of a.
