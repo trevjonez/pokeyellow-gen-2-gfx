@@ -1228,6 +1228,10 @@ _UpdateCGBPal_BGP::
 
 _UpdateCGBPal_OBP::
 	FOR index, NUM_ACTIVE_PALS
+		IF index == 1
+			call KeepPikachuObjPal
+			jr nz, .skipPikachu
+		ENDC
 		ld a, [wCGBBasePalPointers + index * 2]
 		ld e, a
 		ld a, [wCGBBasePalPointers + index * 2 + 1]
@@ -1251,8 +1255,34 @@ _UpdateCGBPal_OBP::
 		ENDC
 
 		call TransferCurOBPData
+		IF index == 1
+.skipPikachu
+		ENDC
 	ENDR
 
+	ret
+
+; Per-tile color keeps the follower Pikachu in OBJ palette 5, which OBP1 would
+; otherwise overwrite with a map palette (Cut, Strength, LoadGBPal). Nothing
+; rebuilds it until rOBP0 changes, so leave it alone.
+; Returns nz to skip palette 5. c = CONVERT_OBP0/1.
+KeepPikachuObjPal:
+	ld a, c
+	cp CONVERT_OBP1
+	jr z, .obp1
+	xor a
+	ret
+.obp1
+	ldh a, [rWBK]
+	ld b, a
+	ld a, 2
+	ldh [rWBK], a
+	ld a, [W2_UsePerTileColor]
+	ld e, a
+	ld a, b
+	ldh [rWBK], a
+	ld a, e
+	and a
 	ret
 
 ; During a move animation, OBJ palettes 2 and 3 (the effect sprites) use the
